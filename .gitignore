@@ -1,0 +1,29 @@
+# 의존성·빌드 산출물
+node_modules/
+dist/
+coverage/
+
+# 테스트·검사 임시 파일(하네스가 매번 다시 만든다)
+.tmp/
+reports/harness/vitest-results.json
+
+# 개발자 개인 로컬 데이터(실제 가사·개인 번역·실기기 DB 사본 등). 저장소에 올리지 않는다.
+local-data/
+
+# 비밀정보: 절대 커밋하지 않는다(키는 OS 보안 저장소에만 저장)
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.keystore
+*.jks
+*.mobileprovision
+
+# OS·편집기
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/

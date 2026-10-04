@@ -1,0 +1,12 @@
+{
+  "//": "앱 번들에 들어가는 src만 빌드한다. types: [] 로 Node 전용 API 사용을 컴파일 단계에서 막는다.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "sourceMap": false,
+    "types": []
+  },
+  "include": ["src"]
+}

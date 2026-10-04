@@ -1,0 +1,17 @@
+# 문서(Markdown)는 표 정렬로 인한 대량 변경을 피하기 위해 포맷 검사에서 제외한다.
+*.md
+node_modules/
+dist/
+coverage/
+.tmp/
+reports/
+local-data/
+package-lock.json
+fixtures/**/*.lrc
+fixtures/**/*.txt
+apps/mobile/.tmp/
+apps/mobile/.expo/
+apps/mobile/ios/
+apps/mobile/android/
+*.swift
+*.podspec

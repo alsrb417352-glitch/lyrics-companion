@@ -1,0 +1,13 @@
+{
+  "id": 1001,
+  "name": "夜明けのホーム",
+  "trackName": "夜明けのホーム",
+  "artistName": "Synthetic Band",
+  "albumName": "Test Album",
+  "duration": 210,
+  "instrumental": false,
+  "hasWordSync": false,
+  "plainLyrics": "夜明けの駅で君を待つ\nまだ ねむい まちのなか\n光の中へ走り出す\n\nラララ ふたりで\n同じ空を見上げてた\nラララ ふたりで\nHello さよなら また明日\n",
+  "syncedLyrics": "[ti:夜明けのホーム]\n[ar:Synthetic Band]\n[al:Test Album]\n[by:합성 테스트 데이터 - 실제 곡 아님]\n[00:12.00]夜明けの駅で君を待つ\n[00:17.50]まだ ねむい まちのなか\n[00:23.00]光の中へ走り出す\n[00:28.40]\n[00:30.00]ラララ ふたりで\n[00:35.20]同じ空を見上げてた\n[00:41.00]ラララ ふたりで\n[00:46.80]Hello さよなら また明日\n[03:25.00]\n",
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: 夜明けのホーム\n"
+}

@@ -1,0 +1,64 @@
+# CI: 자동 검사만 실행한다. 실기기·실제 스트리밍 계정·실제 AI 호출은 하지 않는다(비밀 값 불필요).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['22.x', '24.x']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  windows-korean-path:
+    # 사용자 환경(E:\ai data\노래가사앱(로컬))과 같은 "공백 + 한글 + 괄호" 경로에서 검사가 동작하는지 확인
+    name: check in path with spaces and Korean (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+      - name: copy repo to a path with spaces and Korean characters
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'ai data\노래가사앱(로컬)'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Get-ChildItem -Force -Path . | Where-Object { $_.Name -ne '.git' } | Copy-Item -Destination $dest -Recurse -Force
+          "DEST=$dest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: npm ci && npm run check
+        shell: pwsh
+        working-directory: ${{ env.DEST }}
+        run: |
+          npm ci
+          npm run check
+
+  mutation:
+    # 테스트 실효성 점검: 핵심 불변조건을 망가뜨리면 테스트가 실패해야 한다
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - run: npm run check:mutation
+
+  # iOS·Android 앱 빌드 잡은 apps/mobile 생성(Phase 1) 이후 추가한다. iOS 빌드는 macOS 러너와 Xcode가 필요하다.

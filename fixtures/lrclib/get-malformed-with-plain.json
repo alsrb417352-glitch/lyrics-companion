@@ -1,0 +1,13 @@
+{
+  "id": 1006,
+  "name": "Broken Clock",
+  "trackName": "Broken Clock",
+  "artistName": "Imaginary Duo",
+  "albumName": "Lantern EP",
+  "duration": 150,
+  "instrumental": false,
+  "hasWordSync": false,
+  "plainLyrics": "first timed line\nthis line has no timestamp\nanother line\n",
+  "syncedLyrics": "[00:01.00]first timed line\nthis line has no timestamp\n[00:75.00]invalid seconds\n[00:05.00]another line\n",
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: Broken Clock\n"
+}

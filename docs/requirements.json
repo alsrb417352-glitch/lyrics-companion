@@ -1,0 +1,600 @@
+{
+  "$comment": "요구사항 레지스트리(단일 원본). 상태를 바꾸면 npm run trace:update 로 docs/traceability.md를 다시 생성한다. core=플랫폼 독립 로직 상태, app=모바일 앱(UI·네이티브) 상태. verified는 자동 테스트 통과를 뜻하며 실제 서비스 연동 성공을 뜻하지 않는다.",
+  "statusLegend": {
+    "core": {
+      "verified": "core 로직 구현 + 자동 테스트로 검증",
+      "partial": "core 일부 구현·검증, 나머지는 계획",
+      "not-started": "미구현",
+      "n/a": "core 대상 아님(앱·문서·절차)"
+    },
+    "app": {
+      "done": "앱 구현 + 수동 검증 완료",
+      "partial": "앱 일부 구현",
+      "not-started": "미구현",
+      "n/a": "앱 대상 아님"
+    }
+  },
+  "requirements": [
+    {
+      "id": "REQ-APP-01",
+      "title": "Apple Music(Music 앱)이 재생하고 우리 앱은 현재 곡 가사를 자동 싱크로 보여주는 보조 앱으로 동작",
+      "core": "n/a",
+      "app": "partial",
+      "design": "docs/architecture.md §1",
+      "implementation": [
+        "packages/core/src/ports.ts",
+        "apps/mobile/src/services.ts",
+        "apps/mobile/src/ui/Root.tsx",
+        "apps/mobile/README.md"
+      ],
+      "manual": ["MV-UI-01"]
+    },
+    {
+      "id": "REQ-PB-01",
+      "title": "지원 플랫폼에서 현재 곡·재생 위치·재생 상태 자동 감지",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/platform-support.md, docs/architecture.md §3",
+      "implementation": [
+        "packages/core/src/ports.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/playback/ios-system-player.ts",
+        "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
+        "apps/mobile/src/adapters/ios-playback-source.ts",
+        "apps/mobile/src/ui/usePlayback.ts"
+      ],
+      "manual": ["MV-IOS-INSTALL-01", "MV-PB-AND-01", "MV-PB-AND-02", "MV-PB-IOS-01"]
+    },
+    {
+      "id": "REQ-PB-02",
+      "title": "권한 거부 시 안내, 가사 자동 조회가 확정하지 못하면 후보·직접 검색으로 사용자가 선택",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/product.md 흐름 F3, docs/architecture.md §4",
+      "implementation": [
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/lyrics/lrclib-client.ts",
+        "packages/core/src/lyrics/apple-music-lyrics-provider.ts",
+        "apps/mobile/src/ui/LyricsPicker.tsx"
+      ],
+      "manual": ["MV-PB-IOS-02"]
+    },
+    {
+      "id": "REQ-PB-03",
+      "title": "지원 플랫폼에서 재생·일시정지·탐색·이전/다음 제어",
+      "core": "not-started",
+      "app": "partial",
+      "design": "docs/platform-support.md 재생 제어",
+      "implementation": [
+        "packages/core/src/ports.ts",
+        "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx"
+      ],
+      "manual": ["MV-PB-CTL-01"]
+    },
+    {
+      "id": "REQ-PB-04",
+      "title": "다른 앱 위 오버레이는 OS 지원 확인 후 별도 기능으로 제공",
+      "core": "n/a",
+      "app": "not-started",
+      "design": "docs/platform-support.md 오버레이",
+      "implementation": ["docs/platform-support.md"],
+      "manual": ["MV-OVL-01"]
+    },
+    {
+      "id": "REQ-PB-05",
+      "title": "앱 안에서 곡 검색·선택 → 스트리밍 앱 재생(iOS Apple Music, 유료 개발자 계정 없이)",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/platform-support.md §2.6, docs/decisions/ADR-0002-ios-without-mac.md",
+      "implementation": [
+        "packages/core/src/catalog/itunes-catalog.ts",
+        "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
+        "apps/mobile/src/ui/SearchScreen.tsx"
+      ],
+      "manual": ["MV-PB-IOS-03"]
+    },
+    {
+      "id": "REQ-LY-01",
+      "title": "LRCLIB 조회: 식별 헤더, 순차·간격 요청, 429 Retry-After 준수, 응답 검증",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §5",
+      "implementation": ["packages/core/src/lyrics/lrclib-client.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-LY-02",
+      "title": "가사 없음·일반 가사·싱크 가사·연주곡·잘못된 LRC 상태 구분",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §5",
+      "implementation": ["packages/core/src/lyrics/lyrics-provider.ts", "packages/core/src/lyrics/lrc.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-LY-03",
+      "title": "서비스 ID·ISRC·아티스트·길이·녹음 버전으로 곡 식별, 불확실하면 후보 확인",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §6",
+      "implementation": [
+        "packages/core/src/matching/track-identity.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/lyrics/apple-music-lyrics-provider.ts"
+      ],
+      "manual": ["MV-PB-IOS-02"]
+    },
+    {
+      "id": "REQ-LY-04",
+      "title": "원문이 달라지면 기존 판본·번역 보존, 연결 상태를 사용자가 확인",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/architecture.md §7",
+      "implementation": [
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/lyrics/lyrics-version.ts",
+        "apps/mobile/src/ui/LyricsPicker.tsx"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-SY-01",
+      "title": "원문 타임스탬프 기준 행 단위 싱크, AI는 시간 정보를 만들거나 바꾸지 못함, 단어 싱크 흉내 금지",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §8",
+      "implementation": ["packages/core/src/sync/sync-engine.ts", "packages/core/src/lyrics/lrc.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-SY-02",
+      "title": "재생·일시정지·탐색·곡 변경·백그라운드 복귀 처리, 위치를 모르면 진행 표시 안 함",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/architecture.md §8",
+      "implementation": [
+        "packages/core/src/sync/sync-engine.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "apps/mobile/src/ui/usePlayback.ts"
+      ],
+      "manual": ["MV-PB-AND-02"]
+    },
+    {
+      "id": "REQ-SY-03",
+      "title": "곡별 시간 보정값 저장",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/architecture.md §8",
+      "implementation": ["packages/core/src/storage/lyrics-store.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-SY-04",
+      "title": "시간 정보가 없으면 일반 가사 화면",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §8",
+      "implementation": ["packages/core/src/display/compose.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-UI-01",
+      "title": "큰 글자·여백·현재 행 강조·부드러운 자동 스크롤·충분한 대비(자체 디자인)",
+      "core": "n/a",
+      "app": "not-started",
+      "design": "docs/product.md 가사 화면",
+      "implementation": ["apps/mobile/README.md"],
+      "manual": ["MV-UI-01"]
+    },
+    {
+      "id": "REQ-UI-02",
+      "title": "원문·발음·번역을 같은 행 묶음으로 표시, 원문은 항상 표시",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/architecture.md §9",
+      "implementation": ["packages/core/src/display/compose.ts", "apps/mobile/src/ui/LyricsList.tsx"],
+      "manual": ["MV-UI-01"]
+    },
+    {
+      "id": "REQ-UI-03",
+      "title": "번역·발음 표시를 독립적으로 켜고 끔, 재실행 후 유지",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/architecture.md §9",
+      "implementation": [
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/storage/lyrics-store.ts",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-UI-04",
+      "title": "글자 크기 조절·화면 읽기·동작 줄이기 대응",
+      "core": "partial",
+      "app": "not-started",
+      "design": "docs/product.md 접근성",
+      "implementation": ["packages/core/src/display/compose.ts"],
+      "manual": ["MV-UI-02"]
+    },
+    {
+      "id": "REQ-UI-05",
+      "title": "직접 스크롤 시 자동 추적 일시 중지, 현재 가사로 돌아오기",
+      "core": "not-started",
+      "app": "partial",
+      "design": "docs/product.md 가사 화면",
+      "implementation": ["apps/mobile/README.md", "apps/mobile/src/ui/LyricsList.tsx"],
+      "manual": ["MV-UI-01"]
+    },
+    {
+      "id": "REQ-UI-06",
+      "title": "Apple 로고·전용 자산을 복제하지 않는 자체 디자인",
+      "core": "n/a",
+      "app": "not-started",
+      "design": "docs/product.md 가사 화면",
+      "implementation": ["docs/product.md"],
+      "manual": ["MV-UI-01", "MV-LEGAL-01"]
+    },
+    {
+      "id": "REQ-TR-01",
+      "title": "사용자가 AI 제공자와 API 키 등록, 특정 제공자·모델 비종속",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/architecture.md §10",
+      "implementation": [
+        "packages/core/src/translation/provider.ts",
+        "packages/core/src/translation/openai-compatible-provider.ts",
+        "packages/core/src/security/api-keys.ts",
+        "packages/core/src/translation/provider-config.ts",
+        "apps/mobile/src/ui/SettingsScreen.tsx"
+      ],
+      "manual": ["MV-AI-01"]
+    },
+    {
+      "id": "REQ-TR-02",
+      "title": "영어: 원문+번역, 일본어: 원문+발음+번역",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/product.md 표시 규칙",
+      "implementation": ["packages/core/src/util/text.ts", "packages/core/src/translation/translation-service.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-03",
+      "title": "일본어 발음 = 한국어 사용자를 위한 한글 독음(가정 명시), 사용자 수정 가능",
+      "core": "partial",
+      "app": "not-started",
+      "design": "docs/product.md 발음 정의",
+      "implementation": ["packages/core/src/pronunciation/kana-to-hangul.ts"],
+      "manual": ["MV-AI-02"]
+    },
+    {
+      "id": "REQ-TR-04",
+      "title": "가사 선택 우선순위: 사용자 번역 → 저장된 AI 번역 → 원문 → 조건 충족 시 신규 AI 번역",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11",
+      "implementation": [
+        "packages/core/src/translation/selection.ts",
+        "packages/core/src/translation/translation-service.ts"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-05",
+      "title": "저장된 번역이 있으면 재생·재시작·표시 변경·모델/프롬프트/제공자 변경으로 AI 호출 안 함",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11 INV-1, INV-2",
+      "implementation": ["packages/core/src/translation/translation-service.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-06",
+      "title": "사용자 번역(부분 포함)은 자동 수정·보완·덮어쓰기 금지",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11 INV-3",
+      "implementation": ["packages/core/src/translation/selection.ts", "packages/core/src/storage/lyrics-store.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-07",
+      "title": "발음이 없다는 이유로 번역을 재생성하지 않음, 발음 생성은 별도 요청",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11 INV-4",
+      "implementation": ["packages/core/src/translation/translation-service.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-08",
+      "title": "재번역은 명시 요청 시에만, 사용자 저장본 보존, 새 결과는 별도 버전",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11 INV-5",
+      "implementation": [
+        "packages/core/src/translation/translation-service.ts",
+        "packages/core/src/translation/selection.ts"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-09",
+      "title": "동시 요청 합치기, 원자적 저장, 늦은 응답·이전 곡 응답이 현재 화면·사용자 저장본을 덮지 않음",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11 INV-6, INV-7, §12",
+      "implementation": [
+        "packages/core/src/translation/translation-service.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/storage/lyrics-store.ts"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-10",
+      "title": "처리 여부가 불확실한 타임아웃·앱 종료 후 자동 재요청 금지, 중복 과금 경계 기록",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §11 INV-8, docs/security.md 비용",
+      "implementation": [
+        "packages/core/src/translation/translation-service.ts",
+        "packages/core/src/storage/lyrics-store.ts"
+      ],
+      "manual": ["MV-AI-01"]
+    },
+    {
+      "id": "REQ-TR-11",
+      "title": "행 ID 구조화 응답 검증, 불완전·거절 결과를 완료로 저장하지 않음, 재시도 범위 구분",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §10",
+      "implementation": [
+        "packages/core/src/translation/validate.ts",
+        "packages/core/src/translation/translation-service.ts"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-TR-12",
+      "title": "곡 전체 문맥·화자·정서·반복 보존, 원문에 없는 내용 추가 금지, 혼합 언어·빈 행·긴 가사 처리",
+      "core": "partial",
+      "app": "not-started",
+      "design": "docs/architecture.md §10",
+      "implementation": ["packages/core/src/translation/prompt.ts"],
+      "manual": ["MV-AI-02"]
+    },
+    {
+      "id": "REQ-TR-13",
+      "title": "자동 번역 동의(기본 꺼짐), 일일 요청 상한, 크기 상한, 호출 제한",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/security.md 비용·호출 제한",
+      "implementation": [
+        "packages/core/src/translation/translation-service.ts",
+        "packages/core/src/storage/lyrics-store.ts",
+        "apps/mobile/src/ui/SettingsScreen.tsx"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-ED-01",
+      "title": "사용자 번역 직접 입력·붙여넣기·수정·저장",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/product.md 흐름 F5",
+      "implementation": [
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/import/user-translation-import.ts"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-ED-02",
+      "title": "TXT/LRC 가져오기, 행 수·시간 불일치 시 자동 끼워 맞추지 않고 미리보기·수동 연결",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/product.md 흐름 F5",
+      "implementation": ["packages/core/src/import/user-translation-import.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-ED-03",
+      "title": "일본어 발음(한글 독음) 행별 사용자 수정",
+      "core": "partial",
+      "app": "not-started",
+      "design": "docs/product.md 발음 정의",
+      "implementation": ["packages/core/src/storage/lyrics-store.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-ST-01",
+      "title": "원문·발음·번역·싱크 정보를 기기에 영구 저장, 같은 곡 재생 시 저장본 사용",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/architecture.md §7",
+      "implementation": [
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/storage/migrations.ts",
+        "apps/mobile/src/adapters/sqlite-driver.ts"
+      ],
+      "manual": ["MV-ST-01"]
+    },
+    {
+      "id": "REQ-ST-02",
+      "title": "저장된 데이터는 네트워크 없이 열람 가능",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §7",
+      "implementation": ["packages/core/src/session/now-playing-session.ts"],
+      "manual": []
+    },
+    {
+      "id": "REQ-ST-03",
+      "title": "캐시 정리·앱 업데이트로 저장본이 사라지지 않음(영구 저장 위치, 안전한 마이그레이션)",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/architecture.md §7, docs/security.md 저장·백업",
+      "implementation": ["packages/core/src/storage/migrations.ts"],
+      "manual": ["MV-ST-01"]
+    },
+    {
+      "id": "REQ-SEC-01",
+      "title": "API 키는 OS 보안 저장소에만, 소스·설정·로그·오류·테스트 데이터·내보내기에 포함 금지",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/security.md 키 관리",
+      "implementation": [
+        "packages/core/src/security/api-keys.ts",
+        "packages/core/src/security/redact.ts",
+        "packages/core/src/security/logger.ts",
+        "apps/mobile/src/adapters/secure-store.ts"
+      ],
+      "manual": ["MV-SEC-01"]
+    },
+    {
+      "id": "REQ-SEC-02",
+      "title": "개발자 공용 비밀 키를 앱에 넣지 않음, 저장소 비밀정보 검사",
+      "core": "verified",
+      "app": "n/a",
+      "design": "docs/security.md 키 관리",
+      "implementation": ["scripts/scan-secrets.mjs", "scripts/lib/secret-patterns.mjs"],
+      "manual": []
+    },
+    {
+      "id": "REQ-SEC-03",
+      "title": "키 등록·교체·삭제 제공, 키를 채팅·문서에 붙여 넣게 하지 않음",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/security.md 키 관리",
+      "implementation": ["packages/core/src/security/api-keys.ts"],
+      "manual": ["MV-SEC-01"]
+    },
+    {
+      "id": "REQ-SEC-04",
+      "title": "HTTPS·인증서 검증 사용, 인증이 필요하면 공식 모바일 인증 흐름과 최소 권한",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/security.md 전송",
+      "implementation": [
+        "packages/core/src/translation/openai-compatible-provider.ts",
+        "packages/core/src/lyrics/lrclib-client.ts",
+        "apps/mobile/src/adapters/http.ts"
+      ],
+      "manual": ["MV-SEC-01"]
+    },
+    {
+      "id": "REQ-SEC-05",
+      "title": "AI로 보내는 데이터·예상 비용·자동 번역 동작을 사용자가 이해하고 선택",
+      "core": "partial",
+      "app": "not-started",
+      "design": "docs/security.md 외부 전송",
+      "implementation": ["packages/core/src/translation/translation-service.ts"],
+      "manual": ["MV-AI-01"]
+    },
+    {
+      "id": "REQ-SEC-06",
+      "title": "재생 감지에 필요 없는 알림 내용·사용자 데이터 저장·전송 금지",
+      "core": "n/a",
+      "app": "not-started",
+      "design": "docs/security.md 권한",
+      "implementation": ["docs/security.md"],
+      "manual": ["MV-PB-AND-01", "MV-SEC-01"]
+    },
+    {
+      "id": "REQ-SEC-07",
+      "title": "외부 가사·파일·AI 응답 불신: 크기·형식·인코딩 검증, 가사 속 지시문을 명령으로 실행하지 않음",
+      "core": "verified",
+      "app": "not-started",
+      "design": "docs/security.md 입력 검증",
+      "implementation": [
+        "packages/core/src/lyrics/lrc.ts",
+        "packages/core/src/translation/validate.ts",
+        "packages/core/src/translation/prompt.ts",
+        "packages/core/src/catalog/itunes-catalog.ts"
+      ],
+      "manual": []
+    },
+    {
+      "id": "REQ-SEC-08",
+      "title": "사용자 파일 안전한 읽기, 로컬 저장소 접근 보호·백업·삭제 정책",
+      "core": "partial",
+      "app": "not-started",
+      "design": "docs/security.md 저장·백업",
+      "implementation": [
+        "packages/core/src/import/user-translation-import.ts",
+        "packages/core/src/storage/lyrics-store.ts"
+      ],
+      "manual": ["MV-SEC-01"]
+    },
+    {
+      "id": "REQ-LEGAL-01",
+      "title": "가사 조회·번역·저장·표시와 스트리밍 연동의 약관·권리 조건 확인(배포 권한 별도)",
+      "core": "n/a",
+      "app": "n/a",
+      "design": "docs/platform-support.md 약관·권리",
+      "implementation": ["docs/platform-support.md"],
+      "manual": ["MV-LEGAL-01"]
+    }
+  ],
+  "acceptanceTests": [
+    {
+      "id": "AT-01",
+      "title": "최초 번역 저장 후 다시 재생하면 AI 추가 호출 0회"
+    },
+    {
+      "id": "AT-02",
+      "title": "앱 종료 후 재실행해도 저장된 번역 사용"
+    },
+    {
+      "id": "AT-03",
+      "title": "사용자 번역(부분 포함)이 있으면 AI 호출 0회"
+    },
+    {
+      "id": "AT-04",
+      "title": "번역·발음 표시 토글 시 네트워크 요청 없음"
+    },
+    {
+      "id": "AT-05",
+      "title": "같은 곡 동시 요청은 하나의 번역 작업"
+    },
+    {
+      "id": "AT-06",
+      "title": "AI 응답보다 사용자 저장이 먼저면 사용자 저장본 유지"
+    },
+    {
+      "id": "AT-07",
+      "title": "곡 변경 후 이전 곡 응답이 현재 화면을 덮지 않음"
+    },
+    {
+      "id": "AT-08",
+      "title": "라이브·리믹스 등 다른 녹음의 가사·번역 혼동 없음"
+    },
+    {
+      "id": "AT-09",
+      "title": "일반·싱크·연주곡·가사 없음·잘못된 LRC 처리"
+    },
+    {
+      "id": "AT-10",
+      "title": "일시정지·탐색·곡 변경·시간 보정 시 올바른 행 표시"
+    },
+    {
+      "id": "AT-11",
+      "title": "오프라인·권한 거부·인증 오류·요청 제한·타임아웃에서 저장본 유지"
+    },
+    {
+      "id": "AT-12",
+      "title": "잘못된 AI 응답·저장 실패를 완료로 처리하지 않음"
+    },
+    {
+      "id": "AT-13",
+      "title": "로그·내보내기·저장소에 비밀 키 노출 없음"
+    },
+    {
+      "id": "AT-14",
+      "title": "저장소 마이그레이션 후 사용자 번역·설정 유지"
+    }
+  ]
+}

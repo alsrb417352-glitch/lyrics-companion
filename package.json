@@ -1,0 +1,36 @@
+{
+  "name": "lyrics-companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "스트리밍 앱에서 재생 중인 일본어·영어 노래의 한국어 번역 가사를 보여주는 보조 앱 (모노레포)",
+  "type": "module",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "check:fix": "node scripts/check.mjs --fix",
+    "format": "node scripts/check.mjs --only format --fix",
+    "lint": "node scripts/check.mjs --only lint",
+    "typecheck": "node scripts/check.mjs --only typecheck",
+    "test": "node scripts/check.mjs --only test",
+    "build": "node scripts/check.mjs --only build",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "trace": "node scripts/traceability.mjs --check",
+    "trace:update": "node scripts/traceability.mjs --write",
+    "check:mutation": "node scripts/mutation-smoke.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3"
+  }
+}

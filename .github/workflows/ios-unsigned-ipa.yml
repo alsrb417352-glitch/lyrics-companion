@@ -1,0 +1,95 @@
+# iOS 무서명 IPA 빌드 (Mac 없이 iPhone에 설치하기 위한 경로, docs/decisions/ADR-0002)
+# - GitHub의 macOS 러너에서 Expo prebuild → Xcode Release 빌드(서명 없음) → Payload 압축(.ipa)
+# - 결과물은 "서명되지 않은" IPA다. Windows의 Sideloadly가 사용자 무료 Apple ID로 서명해 설치한다(docs/ios-install.md).
+# - 비밀 값(Apple 계정·인증서·API 키)을 쓰지 않는다. 저장소에 올리지 않는다.
+# 위치: GitHub 저장소의 .github/workflows/ios-unsigned-ipa.yml 로 복사해서 사용한다(ci/README.md).
+name: ios-unsigned-ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/core/**'
+      - '.github/workflows/ios-unsigned-ipa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-check:
+    # 앱을 빌드하기 전에 core 검사(포맷·린트·타입·테스트·추적성)가 통과해야 한다
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  build-ios:
+    needs: core-check
+    runs-on: macos-26
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Xcode 버전 확인(Expo SDK 57은 Xcode 26.4 이상 필요)
+        run: xcodebuild -version
+      - run: npm ci
+      - name: 앱 타입 검사
+        run: npx tsc --noEmit
+      - name: Expo prebuild (ios 폴더 생성 + CocoaPods 설치)
+        run: npx expo prebuild --platform ios --clean
+        env:
+          CI: '1'
+      - name: Release 빌드(서명 없음)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/app.xcworkspace \
+            -scheme app \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee xcodebuild.log | grep -E "error:|warning: .*NowPlaying|\*\* BUILD" || true
+          test -d build/Build/Products/Release-iphoneos/app.app
+      - name: IPA 묶기
+        run: |
+          rm -rf Payload && mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/app.app Payload/
+          VERSION=$(node -p "require('./app.json').expo.version")
+          zip -qry "LyricsCompanion-${VERSION}-${GITHUB_RUN_NUMBER}-unsigned.ipa" Payload
+          ls -la *.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lyrics-companion-ios-unsigned
+          path: apps/mobile/*.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: 실패 시 빌드 로그 보관
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: apps/mobile/xcodebuild.log
+          retention-days: 7
+          if-no-files-found: ignore

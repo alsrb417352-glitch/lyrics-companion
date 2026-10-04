@@ -1,0 +1,48 @@
+{
+  "resultCount": 4,
+  "results": [
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "trackId": 900000001,
+      "artistName": "Synthetic Band",
+      "collectionName": "Test Album",
+      "trackName": "夜明けのホーム",
+      "trackTimeMillis": 210000,
+      "artworkUrl100": "https://example.invalid/art/100x100bb.jpg"
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "trackId": 900000001,
+      "artistName": "Synthetic Band",
+      "collectionName": "Test Album",
+      "trackName": "夜明けのホーム",
+      "trackTimeMillis": 210000
+    },
+    {
+      "wrapperType": "track",
+      "kind": "music-video",
+      "trackId": 900000002,
+      "artistName": "Synthetic Band",
+      "trackName": "夜明けのホーム (MV)"
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "trackId": "900000003",
+      "artistName": "Synthetic Band",
+      "trackName": "ID가 문자열인 잘못된 항목"
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "trackId": 900000004,
+      "artistName": "Synthetic Band",
+      "collectionName": "Test Album",
+      "trackName": "雨上がりのメモ (Live)",
+      "trackTimeMillis": -5,
+      "artworkUrl100": "http://insecure.invalid/a.jpg"
+    }
+  ]
+}

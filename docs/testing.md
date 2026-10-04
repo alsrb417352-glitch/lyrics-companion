@@ -1,0 +1,97 @@
+# 테스트와 검증
+
+## 1. 검증 상태를 구분하는 규칙
+| 표기 | 의미 | 근거 |
+|---|---|---|
+| **자동검증(core)** | 플랫폼 독립 로직을 가짜 제공자·가짜 시계·실제 SQLite로 검증 | `npm run check` 결과(`reports/harness/latest.md`) |
+| **모의 연동 통과** | 가짜 LRCLIB/AI/재생 이벤트로 흐름이 동작 | 자동 테스트 |
+| **실제 연동 확인** | 실기기·실제 스트리밍 앱·실제 AI 제공자로 확인 | 수동 절차 기록(`docs/manual-verification/records/`) |
+
+- 모의 연동 통과를 실제 연동 성공으로 보고하지 않는다.
+- 실행하지 않은 검사·실기기 확인을 통과로 기록하지 않는다. 실행 못 한 이유를 기록한다.
+
+## 2. 자동 검사 실행
+필요 도구: **Node.js 22.13 이상**(22 LTS 또는 24 LTS). Windows·macOS·Linux 공통.
+
+```powershell
+# Windows PowerShell 예시 (공백·한글 경로 그대로 사용 가능)
+cd "E:\ai data\노래가사앱(로컬)"
+npm ci              # 처음 한 번(의존성 설치)
+npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 비밀정보 → 추적성
+```
+
+| 명령 | 내용 |
+|---|---|
+| `npm run check` | 전체 검사. 결과: `reports/harness/latest.md`, `latest.json`, `history.jsonl`, `traceability-run.md` |
+| `npm run check:fix` | 포맷 자동 수정 + `docs/traceability.md` 재생성 후 전체 검사 |
+| `npm run test` / `lint` / `typecheck` / `build` / `format` | 단계별 실행(같은 하네스 사용) |
+| `npm run scan:secrets` | 비밀정보 검사만 |
+| `npm run trace` / `trace:update` | 추적성 검사 / 추적표 재생성 |
+| `npm run check:mutation` | 뮤테이션 스모크: 핵심 불변조건 코드를 일부러 망가뜨려 테스트가 잡는지 확인(약 1분) |
+
+- 검사 스크립트는 셸을 거치지 않고 `node`로 각 도구를 직접 실행하므로 공백·한글·괄호가 있는 경로에서도 인용 문제 없이 동작하도록 만들었다. 테스트 DB도 저장소 안 `.tmp/test-runs/`(같은 한글 경로)에 만든다.
+- 자동 테스트는 실제 네트워크를 쓰지 않는다(`no-network.ts`가 `fetch`를 막음). 실제 계정·API 키·유료 호출이 필요 없다.
+- `node:sqlite`는 Node 22에서 실험 기능 경고가 날 수 있다(검사 스크립트가 경고를 숨김, 동작에는 영향 없음).
+
+## 3. 테스트 구성
+| 종류 | 위치 | 내용 |
+|---|---|---|
+| 단위 | `packages/core/test/unit/` | LRC 파서, SHA-256, 언어 감지, 가나→한글, 프롬프트·응답 검증 계약, LRCLIB 클라이언트, 가져오기, 마스킹, 표시 구성 |
+| 수용 | `packages/core/test/acceptance/` | AT-01~AT-14 + 판본·버전 관리. 실제 core 객체를 하네스로 조립 |
+| 스크립트 | `scripts/test/` | 비밀정보 검사기 |
+| 하네스 | `packages/core/test/support/` | `FakeClock`, `FakeHttp`, `FakeTranslationProvider`(지연·오류·거절 주입), `MemorySecretStore`, `MemorySink`, `NodeSqliteDriver`(저장 실패·지연 주입), `createHarness().restart()`(앱 재실행 재현) |
+| 데이터 | `fixtures/` | **합성 데이터만**: 가사(`lyrics/`), LRCLIB 응답(`lrclib/`), AI 응답(`ai/`), 재생 이벤트(`playback/`), 사용자 번역 파일(`import/`). 실제 곡 가사·실제 키 금지 |
+
+### 필수 자동 검증 사례
+| ID | 사례 | 테스트 파일 |
+|---|---|---|
+| AT-01 | 최초 번역 저장 후 다시 재생하면 AI 추가 호출 0회(제공자·모델 변경 포함) | acceptance/translation-cache |
+| AT-02 | 앱 종료·재실행 후 저장 번역 사용(네트워크 0회) | acceptance/translation-cache |
+| AT-03 | 사용자 번역(전체·부분)이면 AI 호출 0회 | acceptance/translation-cache |
+| AT-04 | 번역·발음 토글 시 네트워크·AI 요청 0회, 설정 유지 | acceptance/translation-cache |
+| AT-05 | 동시 요청 4건 → 제공자 호출 1회, 작업 1건 | acceptance/translation-cache |
+| AT-06 | AI 응답 전 사용자 저장 → 사용자 저장본 유지, AI는 별도 버전 | acceptance/translation-cache |
+| AT-07 | 곡 변경 후 이전 곡 응답·늦은 상태 갱신이 현재 화면에 섞이지 않음(중간 상태까지 검사) | acceptance/translation-cache |
+| AT-08 | 라이브·리믹스·ISRC·후보 확인·호환되지 않는 가사 레코드 | acceptance/lyrics-and-matching |
+| AT-09 | 싱크·일반·연주곡·없음·잘못된 LRC·단어 싱크 | acceptance/lyrics-and-matching |
+| AT-10 | 재생 이벤트 스크립트(일시정지·탐색·간주·보정·백그라운드·곡 불일치·위치 없음), 보정값 저장, AI 시간 값 무시 | acceptance/sync |
+| AT-11 | 오프라인·권한 거부(수동 선택)·인증 오류·429(AI·LRCLIB)·타임아웃·앱 종료·일일 상한·자동 번역 기본 꺼짐 | acceptance/failure-handling |
+| AT-12 | 잘못된 AI 응답 7종, 부분 유효 응답, 저장 실패 롤백, 거절 플래그 | acceptance/failure-handling |
+| AT-13 | 로그·작업 이력·내보내기·DB 파일에 키 없음(제공자가 키를 되돌려 주는 경우 포함), 키 교체·삭제, HTTPS 강제, 프롬프트 인젝션 분리 | acceptance/security-and-migration |
+| AT-14 | v1→v2 마이그레이션 후 사용자 번역·설정·보정값 유지, 실패 시 롤백, 새 스키마 거부 | acceptance/security-and-migration |
+
+요구사항별 연결은 [`traceability.md`](traceability.md)(자동 생성)와 실행 결과 `reports/harness/traceability-run.md`에서 확인한다.
+
+### 테스트 작성 규칙
+- 테스트 제목에 `[AT-xx]`, `[REQ-XX-nn]` 태그를 붙인다. 추적성 검사가 태그로 요구사항↔테스트를 연결하고, 없는 ID를 쓰면 실패한다.
+- 항상 통과하는 빈 테스트 금지. 새 불변조건을 추가하면 `scripts/mutation-smoke.mjs`에 뮤턴트도 추가한다.
+- 시간은 `FakeClock`, 네트워크는 `FakeHttp`, AI는 `FakeTranslationProvider`만 사용한다.
+- 키 형태 문자열은 테스트 소스에 쓰지 않고 실행 중 조립한다(비밀정보 검사 통과).
+
+## 4. 자동화하지 않는(별도 환경이 필요한) 검증
+| 구분 | 필요 환경 | 자동 실행 |
+|---|---|---|
+| Android 앱 빌드·실행 | Android SDK, JDK, (권장) ASCII 경로 가상 드라이브 | Phase 1 이후 CI 추가 예정 |
+| iOS 앱 빌드 | macOS + Xcode 26.4+ | **GitHub Actions `ios-unsigned-ipa`**(macos-26 러너, 무서명 Release IPA). 로컬 Windows·클라우드 Linux에서는 앱 타입 검사·JS 번들(`npm run bundle:ios`)·prebuild까지만 가능 |
+| iOS 실기기 설치·실행 | iPhone + Windows Sideloadly + 무료 Apple ID | 수동만(docs/ios-install.md) |
+| 실제 스트리밍 연동 | 실기기 + 각 서비스 계정 | 수동만 |
+| 실제 AI 호출 | 사용자 본인 API 키, 비용 발생 | **자동 실행 금지**, 수동만 |
+
+## 5. 수동 검증 절차
+기록 양식: [`manual-verification/TEMPLATE.md`](manual-verification/TEMPLATE.md) → `manual-verification/records/YYYY-MM-DD-<ID>.md`로 저장. 결과는 통과/실패/부분/실행 못 함 중 하나와 증거(스크린샷 경로·로그 요약)를 남긴다.
+
+- **MV-PB-AND-01** Android 재생 정보: 기기(제조사·Android 버전) × Apple Music/Spotify/YouTube Music 각각 재생 → 알림 접근 허용(사이드로드 시 "제한된 설정 허용" 필요 여부 기록) → 제목·아티스트·앨범·길이·MEDIA_ID·위치·속도·상태 기록. 곡 변경 인식 시간(목표 2초), 위치 오차(목표 ±500ms, 화면 녹화로 측정). 알림 내용을 읽지 않는지 코드 확인.
+- **MV-PB-AND-02** Android 백그라운드·화면 잠금: 앱을 백그라운드/화면 끔 상태로 10분 → 복귀 시 위치 재측정·올바른 행 표시. 배터리 최적화 켠/끈 상태 비교.
+- **MV-PB-IOS-01** iOS Apple Music 자동 싱크: 권한 요청 문구, 곡 변경 인식 시간(목표 2초), 화면 녹화로 가사 강조 시점과 실제 소리 비교(목표 ±500ms), Music 앱·잠금 화면·제어 센터에서 탐색했을 때 반영 지연(목표 1초), 일시정지·재개, 백그라운드 복귀, 우리 앱에서 재생/일시정지/다음/이전/±10초/줄 탭 이동/곡 선택(`setQueue`).
+- **MV-PB-IOS-02** 가사 자동 조회(한국 Apple Music 현지화 표기): 일본 곡 10곡 이상을 Music 앱에서 재생 → Music 앱이 준 제목·가수 표기 기록, 자동 표시 / 후보 확인 / 못 찾음 비율, 잘못된 곡 가사가 자동 적용된 사례(0건이어야 함), 후보 선택 후 재생 시 재조회 없음.
+- **MV-PB-IOS-03** iOS 앱 안 곡 선택: 검색 탭 Apple Music에서 일본 곡 5곡(kr 결과 없음 → jp 스토어 ID)을 골라 Music 앱이 재생하는지, 실패 시 오류 문구가 나오는지. 보관함 검색 → 재생. 재생 후 지금 재생 탭이 해당 곡 가사를 보여 주는지.
+- **MV-IOS-INSTALL-01** 무료 서명 설치: GitHub Actions IPA 빌드 성공 → Sideloadly 설치 → 신뢰·개발자 모드 → 실행. 번역·설정·API 키 저장 후 같은 Apple ID로 재설치(7일 갱신 모사) → 데이터·키 유지 여부 기록.
+- **MV-PB-CTL-01** 재생 제어: 지원 조합에서 각 명령 동작, 미지원 명령 버튼 숨김.
+- **MV-UI-01** 가사 화면 검토: 대비 4.5:1 이상(색 대비 도구), 현재 행 강조, 부드러운 스크롤, 직접 스크롤 시 추적 중지·복귀 버튼, 위치 모름 표시, Apple 자산 미사용.
+- **MV-UI-02** 접근성: 시스템 글자 크기 최대(200%), VoiceOver/TalkBack 읽기 순서("원문. 발음 …. 번역 …"), 동작 줄이기 켬 시 애니메이션 없음.
+- **MV-AI-01** 실제 AI 제공자(사용자 본인 키, **1회만**, 합성 가사 사용): 키 등록 → 동의 화면 → 번역 1회 → 비용 확인 → 결과 저장·재생 시 재호출 없음 확인. 제공자의 중복 요청 방지 키·요청 ID 조회 지원 여부를 문서로 확인해 기록. 오류 메시지에 키가 포함되는지 확인.
+- **MV-AI-02** 번역·발음 품질 평가: 합성 가사 + 사용자가 권리를 가진(또는 개인 감상용) 곡 샘플 5곡. 평가표: 행 대응, 의미 정확, 화자·정서, 반복 일관성, 추가 내용 없음, 혼합 언어, 한자 읽기 정확도, 한글 독음 자연스러움(1–5점). 실제 가사는 `local-data/`에만 두고 저장소에 올리지 않는다.
+- **MV-SEC-01** 실기기 보안: 키가 보안 저장소에만 있는지(앱 데이터 백업·DB 파일·로그·내보내기 파일 검색), Android Auto Backup 제외, iOS 재설치 후 잔존 키 처리, http 요청 차단.
+- **MV-ST-01** 업데이트 후 데이터 유지: 이전 버전 설치 → 번역·설정 저장 → 새 버전으로 업데이트(마이그레이션) → 데이터·설정 유지, 마이그레이션 사본 생성 확인. 캐시 삭제 후에도 유지.
+- **MV-OVL-01** 오버레이 가능성(Android): 권한 흐름, 다른 앱 위 표시 동작, Google Play 정책 조항 확인 후 제공 여부 결정.
+- **MV-LEGAL-01** 약관·권리 검토: docs/platform-support.md §5 표의 각 항목에 대해 원문 조항·해석·결론·확인 날짜 기록(법률 자문 필요 여부 포함).

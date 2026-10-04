@@ -1,0 +1,13 @@
+{
+  "id": 1004,
+  "name": "雨上がりのメモ",
+  "trackName": "雨上がりのメモ",
+  "artistName": "Synthetic Band",
+  "albumName": "Test Album",
+  "duration": 180,
+  "instrumental": false,
+  "hasWordSync": false,
+  "plainLyrics": "雨上がりのメモを\nポケットにしまって\n\nまだ知らない道を\nゆっくり歩こう\n",
+  "syncedLyrics": null,
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: 雨上がりのメモ\n"
+}

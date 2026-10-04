@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1002,
+    "name": "Paper Lanterns",
+    "trackName": "Paper Lanterns",
+    "artistName": "Imaginary Duo",
+    "albumName": "Lantern EP",
+    "duration": 200,
+    "instrumental": false,
+    "hasWordSync": false,
+    "plainLyrics": "Paper lanterns drifting over the river\nEvery promise that we made in the summer\n\nHold on, hold on, the night is young\nHold on, hold on, the night is young\nWe'll find our way back home\n",
+    "syncedLyrics": "[ti:Paper Lanterns]\n[ar:Imaginary Duo]\n[by:합성 테스트 데이터 - 실제 곡 아님]\n[00:05.00]Paper lanterns drifting over the river\n[00:10.50]Every promise that we made in the summer\n[00:16.00]\n[00:18.00]Hold on, hold on, the night is young\n[00:23.50]Hold on, hold on, the night is young\n[00:29.00]We'll find our way back home\n",
+    "lyricsfile": "version: '1.0'\nmetadata:\n  title: Paper Lanterns\n"
+  },
+  {
+    "id": 1003,
+    "name": "Paper Lanterns (Live at Hall)",
+    "trackName": "Paper Lanterns (Live at Hall)",
+    "artistName": "Imaginary Duo",
+    "albumName": "Live at Hall",
+    "duration": 245,
+    "instrumental": false,
+    "hasWordSync": false,
+    "plainLyrics": "Paper lanterns drifting over the river (live)\nEvery promise that we made in the summer\nHold on, hold on, the night is young\nWe'll find our way back home\n",
+    "syncedLyrics": "[00:09.00]Paper lanterns drifting over the river (live)\n[00:15.00]Every promise that we made in the summer\n[00:22.00]Hold on, hold on, the night is young\n[00:30.00]We'll find our way back home\n",
+    "lyricsfile": "version: '1.0'\nmetadata:\n  title: Paper Lanterns (Live at Hall)\n"
+  },
+  {
+    "id": "bad",
+    "trackName": 5
+  }
+]

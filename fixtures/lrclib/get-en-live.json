@@ -1,0 +1,13 @@
+{
+  "id": 1003,
+  "name": "Paper Lanterns (Live at Hall)",
+  "trackName": "Paper Lanterns (Live at Hall)",
+  "artistName": "Imaginary Duo",
+  "albumName": "Live at Hall",
+  "duration": 245,
+  "instrumental": false,
+  "hasWordSync": false,
+  "plainLyrics": "Paper lanterns drifting over the river (live)\nEvery promise that we made in the summer\nHold on, hold on, the night is young\nWe'll find our way back home\n",
+  "syncedLyrics": "[00:09.00]Paper lanterns drifting over the river (live)\n[00:15.00]Every promise that we made in the summer\n[00:22.00]Hold on, hold on, the night is young\n[00:30.00]We'll find our way back home\n",
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: Paper Lanterns (Live at Hall)\n"
+}

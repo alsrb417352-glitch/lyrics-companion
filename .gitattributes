@@ -1,0 +1,5 @@
+# Windows에서도 LF로 유지(포맷 검사·해시 일관성)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.sqlite binary

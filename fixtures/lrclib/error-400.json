@@ -1,0 +1,5 @@
+{
+  "message": "duration: must be between 1 and 3600",
+  "name": "ValidationError",
+  "statusCode": 400
+}

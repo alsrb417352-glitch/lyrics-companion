@@ -1,0 +1,13 @@
+{
+  "id": 1008,
+  "name": "Word Steps",
+  "trackName": "Word Steps",
+  "artistName": "Imaginary Duo",
+  "albumName": "Lantern EP",
+  "duration": 120,
+  "instrumental": false,
+  "hasWordSync": true,
+  "plainLyrics": "Paper lanterns drifting\nover the river\n",
+  "syncedLyrics": "[00:01.00]<00:01.00>Paper <00:01.50>lanterns <00:02.10>drifting\n[00:04.00]<00:04.00>over <00:04.40>the <00:04.80>river\n",
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: Word Steps\n"
+}

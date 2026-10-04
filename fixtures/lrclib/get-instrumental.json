@@ -1,0 +1,13 @@
+{
+  "id": 1005,
+  "name": "Interlude No.3",
+  "trackName": "Interlude No.3",
+  "artistName": "Synthetic Band",
+  "albumName": "Test Album",
+  "duration": 95,
+  "instrumental": true,
+  "hasWordSync": false,
+  "plainLyrics": null,
+  "syncedLyrics": null,
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: Interlude No.3\n"
+}

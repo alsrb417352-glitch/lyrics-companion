@@ -1,0 +1,82 @@
+{
+  "description": "합성 재생 이벤트 시나리오: ja-synced.lrc(행 시작 12000,17500,23000,28400,30000,35200,41000,46800,205000ms) 기준. 각 단계는 시계 진행 → (선택) 새 스냅샷 → 기대 결과 순서로 실행한다.",
+  "track": {
+    "service": "apple-music",
+    "serviceTrackId": "am.1001",
+    "title": "夜明けのホーム",
+    "artist": "Synthetic Band",
+    "album": "Test Album",
+    "durationMs": 210000,
+    "isrc": null
+  },
+  "steps": [
+    {
+      "name": "재생 시작 직후(첫 행 이전)",
+      "snapshot": { "status": "playing", "positionMs": 0 },
+      "advanceMs": 0,
+      "expect": { "mode": "synced", "activeLineId": null }
+    },
+    { "name": "12.5초", "advanceMs": 12500, "expect": { "mode": "synced", "activeLineId": "l0001" } },
+    { "name": "18.5초", "advanceMs": 6000, "expect": { "mode": "synced", "activeLineId": "l0002" } },
+    {
+      "name": "일시정지 후 30초 경과해도 위치 고정",
+      "snapshot": { "status": "paused", "positionMs": 18500 },
+      "advanceMs": 30000,
+      "expect": { "mode": "synced", "activeLineId": "l0002" }
+    },
+    {
+      "name": "재개 후 5초",
+      "snapshot": { "status": "playing", "positionMs": 18500 },
+      "advanceMs": 5000,
+      "expect": { "mode": "synced", "activeLineId": "l0003" }
+    },
+    { "name": "빈 행(간주) 구간", "advanceMs": 5500, "expect": { "mode": "synced", "activeLineId": "l0004" } },
+    {
+      "name": "앞으로 탐색 41.5초",
+      "snapshot": { "status": "playing", "positionMs": 41500 },
+      "advanceMs": 0,
+      "expect": { "mode": "synced", "activeLineId": "l0007" }
+    },
+    {
+      "name": "뒤로 탐색 13초",
+      "snapshot": { "status": "playing", "positionMs": 13000 },
+      "advanceMs": 0,
+      "expect": { "mode": "synced", "activeLineId": "l0001" }
+    },
+    {
+      "name": "보정 전 45.9초",
+      "snapshot": { "status": "playing", "positionMs": 45900 },
+      "advanceMs": 0,
+      "expect": { "mode": "synced", "activeLineId": "l0007" }
+    },
+    {
+      "name": "+1000ms 보정 적용",
+      "setOffsetMs": 1000,
+      "advanceMs": 0,
+      "expect": { "mode": "synced", "activeLineId": "l0008" }
+    },
+    {
+      "name": "백그라운드 70초(새 측정 없음) → 위치 미확정",
+      "advanceMs": 70000,
+      "expect": { "mode": "unknown", "reason": "stale" }
+    },
+    {
+      "name": "복귀 후 새 측정 200초",
+      "snapshot": { "status": "playing", "positionMs": 200000 },
+      "advanceMs": 0,
+      "expect": { "mode": "synced", "activeLineId": "l0008" }
+    },
+    {
+      "name": "다른 곡 스냅샷 → 현재 가사에 적용 안 함",
+      "snapshot": { "status": "playing", "positionMs": 12500, "otherTrack": true },
+      "advanceMs": 0,
+      "expect": { "mode": "unknown", "reason": "track-mismatch" }
+    },
+    {
+      "name": "재생 위치 미제공",
+      "snapshot": { "status": "playing", "positionMs": null },
+      "advanceMs": 0,
+      "expect": { "mode": "unknown", "reason": "no-position" }
+    }
+  ]
+}
