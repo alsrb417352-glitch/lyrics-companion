@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { HttpRequest, ServiceTrackRef } from '../../src/ports.js';
+import type { HttpRequest, IdGenerator, ServiceTrackRef } from '../../src/ports.js';
 import { LrclibClient } from '../../src/lyrics/lrclib-client.js';
 import { LrclibLyricsProvider } from '../../src/lyrics/lyrics-provider.js';
 import { ApiKeyManager } from '../../src/security/api-keys.js';
@@ -132,7 +132,7 @@ export const TRACKS = {
 export interface Harness {
   dbPath: string;
   clock: FakeClock;
-  ids: SeqIds;
+  ids: IdGenerator;
   http: FakeHttp;
   provider: FakeTranslationProvider;
   registry: StaticRegistry;
@@ -158,7 +158,7 @@ export interface HarnessOptions {
   /** 재실행 시 이어받을 보안 저장소·시계 */
   secretStore?: MemorySecretStore;
   clock?: FakeClock;
-  ids?: SeqIds;
+  ids?: IdGenerator;
 }
 
 export async function createHarness(opts: HarnessOptions = {}): Promise<Harness> {

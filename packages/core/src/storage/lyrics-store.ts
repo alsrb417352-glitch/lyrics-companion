@@ -15,6 +15,7 @@ import type {
 } from '../model.js';
 import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_TRANSLATION_SETTINGS } from '../model.js';
 import type { StreamingService } from '../ports.js';
+import { BACKUP_FORMAT, type ServiceTrackLink, type UserDataExport } from '../backup/backup-file.js';
 import { migrate } from './migrations.js';
 import { inTransaction, SerialQueue, type SqlDriver, type SqlValue } from './sql-driver.js';
 import {
@@ -59,18 +60,6 @@ export interface AiCommit {
   /** 일부만 성공했을 때 남길 실패 정보(예: 읽기만 실패) */
   partialFailure: JobFailure | null;
   atEpochMs: number;
-}
-
-export interface UserDataExport {
-  format: 'lyrics-companion-export';
-  schemaVersion: number;
-  exportedAtEpochMs: number;
-  songs: Song[];
-  lyricsVersions: LyricsVersion[];
-  translations: TranslationVersion[];
-  pronunciations: PronunciationVersion[];
-  syncOffsets: Array<{ songId: string; offsetMs: number }>;
-  settings: { display: DisplaySettings; translation: TranslationSettings };
 }
 
 type Row = Record<string, SqlValue>;
@@ -576,9 +565,26 @@ export class LyricsStore {
     );
   }
 
-  // ------------------------------------------------------------ 내보내기
+  // ------------------------------------------------------------ 내보내기·가져오기
 
-  /** 사용자 데이터 내보내기. 비밀정보는 저장소에 없으므로 포함될 수 없다(테스트 AT-13으로 확인). */
+  async listServiceTracks(): Promise<ServiceTrackLink[]> {
+    const rows = await this.q.run(() =>
+      this.db.all<Row>(
+        'SELECT service, service_key, song_id, linked_by FROM service_tracks ORDER BY created_at, service_key',
+      ),
+    );
+    return rows.map((r) => ({
+      service: str(r['service']) as StreamingService,
+      serviceKey: str(r['service_key']),
+      songId: str(r['song_id']),
+      linkedBy: str(r['linked_by']) as ServiceTrackLink['linkedBy'],
+    }));
+  }
+
+  /**
+   * 사용자 데이터 내보내기(백업). 비밀정보는 저장소에 없으므로 포함될 수 없다(AT-13).
+   * 자동 번역 동의·제공자 설정·작업 이력·사용량은 넣지 않는다(새 기기에서 다시 선택).
+   */
   async exportUserData(schemaVersion: number, atEpochMs: number): Promise<UserDataExport> {
     const songs = await this.listSongs();
     const lyricsVersions: LyricsVersion[] = [];
@@ -595,15 +601,187 @@ export class LyricsStore {
       if (off !== 0) syncOffsets.push({ songId: s.id, offsetMs: off });
     }
     return {
-      format: 'lyrics-companion-export',
+      format: BACKUP_FORMAT,
       schemaVersion,
       exportedAtEpochMs: atEpochMs,
       songs,
+      serviceTracks: await this.listServiceTracks(),
       lyricsVersions,
       translations,
       pronunciations,
       syncOffsets,
-      settings: { display: await this.getDisplaySettings(), translation: await this.getTranslationSettings() },
+      settings: { display: await this.getDisplaySettings() },
     };
   }
+
+  /** 곡에 저장된 번역·발음의 가치: 사용자 것 2, AI 것만 1, 없음 0 */
+  private async songValue(songId: string): Promise<number> {
+    const r = await this.db.get<Row>(
+      `SELECT MAX(CASE origin WHEN 'user' THEN 2 ELSE 1 END) AS v FROM (
+         SELECT t.origin AS origin FROM translations t JOIN lyrics_versions l ON l.id = t.lyrics_version_id WHERE l.song_id = ?
+         UNION ALL
+         SELECT p.origin AS origin FROM pronunciations p JOIN lyrics_versions l ON l.id = p.lyrics_version_id WHERE l.song_id = ?
+       )`,
+      [songId, songId],
+    );
+    return r && typeof r['v'] === 'number' ? r['v'] : 0;
+  }
+
+  /**
+   * 백업 가져오기(parseBackup으로 검증된 데이터만). 하나의 트랜잭션으로 처리한다(실패하면 아무것도 바뀌지 않음).
+   * 병합 규칙 — 기존 데이터는 지우거나 고치지 않는다:
+   *  - 같은 ID가 이미 있으면 건너뛴다(같은 백업을 두 번 가져와도 결과가 같다).
+   *  - 같은 ID인데 내용이 다르면(가사 해시·연결 판본 불일치) 건너뛰고 충돌로 보고한다.
+   *  - 스트리밍 곡 연결이 이미 다른 곡을 가리키면, 저장된 번역의 가치(사용자 > AI > 없음)가 더 큰 쪽으로 연결한다.
+   *    같으면 기존 연결을 유지한다. 어느 쪽 데이터도 삭제하지 않는다.
+   *  - 싱크 보정값은 새로 추가된 곡에만 적용한다. 표시·자동 번역 설정은 가져오지 않는다.
+   */
+  async importUserData(data: UserDataExport, atEpochMs: number): Promise<ImportReport> {
+    return this.q.run(() =>
+      inTransaction(this.db, async () => {
+        const report: ImportReport = {
+          songsAdded: 0,
+          songsExisting: 0,
+          lyricsAdded: 0,
+          translationsAdded: 0,
+          pronunciationsAdded: 0,
+          linksAdded: 0,
+          linksRelinked: 0,
+          linksKept: 0,
+          offsetsAdded: 0,
+          conflicts: 0,
+        };
+        const newSongs = new Set<string>();
+        for (const s of data.songs) {
+          const exists = await this.db.get<Row>('SELECT id FROM songs WHERE id = ?', [s.id]);
+          if (exists) {
+            report.songsExisting++;
+            continue;
+          }
+          await this.db.run(
+            `INSERT INTO songs(id,title,artist,album,duration_ms,version_tags,isrc,active_lyrics_version_id,created_at)
+             VALUES (?,?,?,?,?,?,?,?,?)`,
+            [
+              s.id,
+              s.title,
+              s.artist,
+              s.album,
+              s.durationMs,
+              JSON.stringify(s.versionTags),
+              s.isrc,
+              s.activeLyricsVersionId,
+              s.createdAtEpochMs,
+            ],
+          );
+          newSongs.add(s.id);
+          report.songsAdded++;
+        }
+
+        const usableLyrics = new Set<string>();
+        for (const v of data.lyricsVersions) {
+          const ex = await this.db.get<Row>('SELECT song_id, content_hash FROM lyrics_versions WHERE id = ?', [v.id]);
+          if (ex) {
+            if (ex['song_id'] === v.songId && ex['content_hash'] === v.contentHash) usableLyrics.add(v.id);
+            else report.conflicts++;
+            continue;
+          }
+          await this.db.run(
+            `INSERT INTO lyrics_versions(id,song_id,source,source_ref,kind,language,lines_json,text_hash,content_hash,has_word_timing_source,created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [
+              v.id,
+              v.songId,
+              v.source,
+              v.sourceRef,
+              v.kind,
+              v.language,
+              JSON.stringify(v.lines),
+              v.textHash,
+              v.contentHash,
+              v.hasWordTimingSource ? 1 : 0,
+              v.createdAtEpochMs,
+            ],
+          );
+          usableLyrics.add(v.id);
+          report.lyricsAdded++;
+        }
+
+        // 저장 순서(seq)를 보존해 "최신 버전" 선택이 백업 당시와 같게 한다.
+        const bySeq = <T extends { seq: number }>(xs: readonly T[]) => [...xs].sort((a, b) => a.seq - b.seq);
+        for (const t of bySeq(data.translations)) {
+          if (!usableLyrics.has(t.lyricsVersionId)) continue;
+          const ex = await this.db.get<Row>('SELECT lyrics_version_id FROM translations WHERE id = ?', [t.id]);
+          if (ex) {
+            if (ex['lyrics_version_id'] !== t.lyricsVersionId) report.conflicts++;
+            continue;
+          }
+          await this.insertTranslation(t);
+          report.translationsAdded++;
+        }
+        for (const p of bySeq(data.pronunciations)) {
+          if (!usableLyrics.has(p.lyricsVersionId)) continue;
+          const ex = await this.db.get<Row>('SELECT lyrics_version_id FROM pronunciations WHERE id = ?', [p.id]);
+          if (ex) {
+            if (ex['lyrics_version_id'] !== p.lyricsVersionId) report.conflicts++;
+            continue;
+          }
+          await this.insertPronunciation(p);
+          report.pronunciationsAdded++;
+        }
+
+        for (const o of data.syncOffsets) {
+          if (!newSongs.has(o.songId)) continue;
+          await this.db.run(
+            'INSERT INTO sync_offsets(song_id, offset_ms) VALUES (?, ?) ON CONFLICT(song_id) DO NOTHING',
+            [o.songId, o.offsetMs],
+          );
+          report.offsetsAdded++;
+        }
+
+        for (const link of data.serviceTracks) {
+          const ex = await this.db.get<Row>(
+            'SELECT song_id FROM service_tracks WHERE service = ? AND service_key = ?',
+            [link.service, link.serviceKey],
+          );
+          if (!ex) {
+            await this.db.run(
+              'INSERT INTO service_tracks(service, service_key, song_id, linked_by, created_at) VALUES (?,?,?,?,?)',
+              [link.service, link.serviceKey, link.songId, link.linkedBy, atEpochMs],
+            );
+            report.linksAdded++;
+            continue;
+          }
+          const current = str(ex['song_id']);
+          if (current === link.songId) continue;
+          if ((await this.songValue(link.songId)) > (await this.songValue(current))) {
+            await this.db.run(
+              'UPDATE service_tracks SET song_id = ?, linked_by = ? WHERE service = ? AND service_key = ?',
+              [link.songId, 'user', link.service, link.serviceKey],
+            );
+            report.linksRelinked++;
+          } else {
+            report.linksKept++;
+          }
+        }
+        return report;
+      }),
+    );
+  }
+}
+
+export interface ImportReport {
+  songsAdded: number;
+  /** 이미 있던 곡(같은 ID) */
+  songsExisting: number;
+  lyricsAdded: number;
+  translationsAdded: number;
+  pronunciationsAdded: number;
+  linksAdded: number;
+  /** 백업 쪽 곡이 더 가치 있는 번역을 가져 연결을 바꾼 수 */
+  linksRelinked: number;
+  /** 기존 곡이 같거나 더 가치 있는 번역을 가져 기존 연결을 유지한 수 */
+  linksKept: number;
+  offsetsAdded: number;
+  /** 같은 ID인데 내용이 달라 건너뛴 항목 수 */
+  conflicts: number;
 }

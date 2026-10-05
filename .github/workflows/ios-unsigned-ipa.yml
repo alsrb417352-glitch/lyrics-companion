@@ -58,8 +58,9 @@ jobs:
         env:
           CI: '1'
       - name: Release 빌드(서명 없음)
+        # xcodebuild가 실패하면 반드시 이 단계가 실패해야 한다(실패를 가리는 `|| true` 금지).
         run: |
-          set -o pipefail
+          XC=0
           xcodebuild \
             -workspace ios/app.xcworkspace \
             -scheme app \
@@ -70,8 +71,22 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build | tee xcodebuild.log | grep -E "error:|warning: .*NowPlaying|\*\* BUILD" || true
-          test -d build/Build/Products/Release-iphoneos/app.app
+            build > xcodebuild.log 2>&1 || XC=$?
+          grep -E "error:|warning: .*NowPlaying" xcodebuild.log || true
+          tail -n 5 xcodebuild.log
+          if [ "$XC" -ne 0 ]; then
+            echo "::error::xcodebuild 실패(종료 코드 $XC). 실패 시 xcodebuild-log 아티팩트를 확인한다."
+            exit "$XC"
+          fi
+          grep -q '\*\* BUILD SUCCEEDED \*\*' xcodebuild.log
+      - name: 앱 묶음 검사(실행 파일·JS 번들 포함 여부)
+        run: |
+          APP=build/Build/Products/Release-iphoneos/app.app
+          EXE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          test -x "$APP/$EXE" || { echo "::error::실행 파일 없음: $EXE"; exit 1; }
+          test -s "$APP/main.jsbundle" || { echo "::error::main.jsbundle 없음 — Release JS 번들이 포함되지 않음"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          du -sh "$APP"
       - name: IPA 묶기
         run: |
           rm -rf Payload && mkdir Payload
@@ -79,7 +94,7 @@ jobs:
           VERSION=$(node -p "require('./app.json').expo.version")
           zip -qry "LyricsCompanion-${VERSION}-${GITHUB_RUN_NUMBER}-unsigned.ipa" Payload
           ls -la *.ipa
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: lyrics-companion-ios-unsigned
           path: apps/mobile/*.ipa
@@ -87,7 +102,7 @@ jobs:
           if-no-files-found: error
       - name: 실패 시 빌드 로그 보관
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: xcodebuild-log
           path: apps/mobile/xcodebuild.log

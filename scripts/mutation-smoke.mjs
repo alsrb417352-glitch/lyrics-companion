@@ -131,6 +131,39 @@ const MUTANTS = [
     find: 'const sure = ranked.find((r) => knownArtists.has(normalizeArtist(r.artistName)));',
     replace: 'const sure = ranked[0] ?? (knownArtists.size < 0 ? ranked[1] : undefined);',
   },
+  {
+    id: 'M16',
+    req: 'REQ-ST-04',
+    desc: '백업 가져오기에서 가사 해시(원문·타임스탬프 변조) 검사 제거',
+    file: S('backup/backup-file.ts'),
+    find: 'if (computeTextHash(lines) !== textHash || computeContentHash(lines) !== contentHash) {',
+    replace: 'if (computeTextHash(lines) !== textHash && computeContentHash(lines) !== contentHash) {',
+  },
+  {
+    id: 'M17',
+    req: 'REQ-TR-06',
+    desc: '백업 가져오기에서 기기의 사용자 번역보다 백업의 AI 번역 쪽으로 곡 연결을 바꿈',
+    file: S('storage/lyrics-store.ts'),
+    find: 'if ((await this.songValue(link.songId)) > (await this.songValue(current))) {',
+    replace: 'if ((await this.songValue(link.songId)) >= 0) {',
+  },
+  {
+    id: 'M18',
+    req: 'REQ-ST-04',
+    desc: '백업 가져오기를 트랜잭션 없이 실행(도중 실패 시 일부만 반영)',
+    file: S('storage/lyrics-store.ts'),
+    find: 'async importUserData(data: UserDataExport, atEpochMs: number): Promise<ImportReport> {\n    return this.q.run(() =>\n      inTransaction(this.db, async () => {',
+    replace:
+      'async importUserData(data: UserDataExport, atEpochMs: number): Promise<ImportReport> {\n    return this.q.run(() =>\n      (async (_db: unknown, f: () => Promise<ImportReport>) => f())(this.db, async () => {',
+  },
+  {
+    id: 'M19',
+    req: 'REQ-ED-03',
+    desc: '사용자가 고친 발음 행에 이전 AI 가나 읽기를 그대로 남김',
+    file: S('import/user-pronunciation.ts'),
+    find: 'lines[id] = { kana: null, hangul };',
+    replace: 'lines[id] = { kana: prev?.kana ?? null, hangul };',
+  },
 ];
 
 const vitest = binPath('vitest');

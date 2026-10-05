@@ -1,64 +1,64 @@
 {
-  "startedAt": "2026-10-04T13:28:35.480Z",
+  "startedAt": "2026-10-05T02:41:00.120Z",
   "node": "v22.22.0",
   "platform": "linux-x64",
-  "root": "/home/claude/work/노래가사앱(로컬)/",
+  "root": "/home/claude/lyrics-companion/",
   "rootHasSpace": false,
-  "rootHasNonAscii": true,
+  "rootHasNonAscii": false,
   "only": null,
   "steps": [
     {
       "name": "format",
       "label": "포맷(Prettier)",
       "status": "pass",
-      "durationMs": 3053
+      "durationMs": 3458
     },
     {
       "name": "lint",
       "label": "정적 분석(ESLint, 아키텍처 경계 포함)",
       "status": "pass",
-      "durationMs": 6615
+      "durationMs": 5973
     },
     {
       "name": "typecheck",
       "label": "타입 검사(테스트 포함)",
       "status": "pass",
-      "durationMs": 2269
+      "durationMs": 2353
     },
     {
       "name": "test",
       "label": "핵심 테스트(Vitest: 단위·수용, 가짜 제공자·가짜 시계·실제 SQLite)",
       "status": "pass",
-      "durationMs": 4763
+      "durationMs": 4843
     },
     {
       "name": "build",
       "label": "빌드(core, 플랫폼 타입 없이 컴파일)",
       "status": "pass",
-      "durationMs": 1399
+      "durationMs": 1545
     },
     {
       "name": "app",
       "label": "앱 타입 검사(apps/mobile, 의존성 설치 시에만)",
       "status": "pass",
-      "durationMs": 2605
+      "durationMs": 2884
     },
     {
       "name": "secrets",
       "label": "비밀정보 검사",
       "status": "pass",
-      "durationMs": 82
+      "durationMs": 85
     },
     {
       "name": "trace",
       "label": "요구사항 추적성(요구사항↔테스트↔문서)",
       "status": "pass",
-      "durationMs": 69
+      "durationMs": 61
     }
   ],
   "tests": {
-    "total": 145,
-    "passed": 145,
+    "total": 155,
+    "passed": 155,
     "failed": 0,
     "skipped": 0
   },

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PROVIDER_PRESETS, validateProviderConfig } from '@lyrics-companion/core';
 import type { AppServices } from '../services';
+import { BackupSection } from './BackupSection';
 import { Button, Chip, Note } from './common';
 import type { Theme } from './theme';
 
@@ -171,10 +172,12 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
         </Note>
       ) : null}
 
+      <BackupSection services={services} theme={theme} />
+
       <Text style={[styles.h2, { color: theme.text, marginTop: 24 }]}>정보</Text>
       <Note theme={theme}>
-        가사·번역·발음·싱크 보정값은 이 기기 안(앱 문서 영역의 SQLite)에만 저장됩니다. 가사 출처: LRCLIB. 곡 검색: Apple
-        iTunes Search.
+        가사·번역·발음·싱크 보정값은 이 기기 안(앱 문서 영역의 SQLite)에만 저장되고, 위의 백업 파일을 만들 때만 밖으로
+        나갑니다. 가사 출처: LRCLIB. 곡 검색: Apple iTunes Search.
       </Note>
       {msg ? (
         <Note theme={theme} tone={msg.danger ? 'danger' : 'dim'}>

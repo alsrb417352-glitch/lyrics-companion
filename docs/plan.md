@@ -6,10 +6,10 @@
 | 단계 | 내용 | 완료 조건 | 상태 |
 |---|---|---|---|
 | **Phase 0** 기반 | 요구사항·연동 조사·지침·core 최소 구현·검증 하네스·CI 설정 | AT-01~14 자동 통과, 뮤테이션 12/12 검출, 문서 작성 | **완료(2026-10-04)** — 단, Windows 실기 실행·CI 실제 실행은 미확인(§4) |
-| **Phase 1** iOS 앱 골격 + Music 앱 연동 (2026-10-04 재배치, ADR-0002) | `apps/mobile` Expo 앱(Release 빌드), 어댑터(ExpoSqliteDriver·ExpoSecretStore·FetchHttpClient·SystemClock), Swift 모듈 `now-playing`(systemMusicPlayer 읽기·제어·`setQueue`), 곡 검색(iTunes Search·보관함), 가사 자동 조회(현지화 표기 대응·후보 확인, D-18), 자동 싱크(0.5초 재조회, D-19), 가사 화면, 설정(제공자·키·자동 번역 동의), GitHub Actions 무서명 IPA 빌드 | GitHub Actions에서 IPA 빌드 성공, Sideloadly로 iPhone 설치, MV-PB-IOS-01·02·03, MV-IOS-INSTALL-01 기록 | **진행 중** — 코드·문서 작성, 앱 타입 검사·JS 번들(Metro)·prebuild·자동링크 확인. **Swift 컴파일·실기기 미확인** |
+| **Phase 1** iOS 앱 골격 + Music 앱 연동 (2026-10-04 재배치, ADR-0002) | `apps/mobile` Expo 앱(Release 빌드), 어댑터(ExpoSqliteDriver·ExpoSecretStore·FetchHttpClient·SystemClock), Swift 모듈 `now-playing`(systemMusicPlayer 읽기·제어·`setQueue`), 곡 검색(iTunes Search·보관함), 가사 자동 조회(현지화 표기 대응·후보 확인, D-18), 자동 싱크(0.5초 재조회, D-19), 가사 화면, 설정(제공자·키·자동 번역 동의), GitHub Actions 무서명 IPA 빌드 | GitHub Actions에서 IPA 빌드 성공, Sideloadly로 iPhone 설치, MV-PB-IOS-01·02·03, MV-IOS-INSTALL-01 기록 | **진행 중** — GitHub Actions 첫 빌드 성공(2026-10-04, IPA 8.15MB; 당시 워크플로가 xcodebuild 실패를 가릴 수 있어 D-24로 수정, 다음 빌드에서 재확인). 사용자 PC에 Sideloadly·iTunes·iCloud(웹 버전)·GitHub Desktop 설치 확인(2026-10-05). **iPhone 설치·실기기 미확인** |
 | **Phase 2** 번역 실사용·동의 | 제공자 실제 호출(MV-AI-01), 실패·결과 미확인 UX 다듬기, Anthropic Messages 등 추가 어댑터 | MV-AI-01, MV-SEC-01 | 대기(AI 제공자 선택 필요) |
 | **Phase 3** 가사 화면 완성 | 자동 스크롤·접근성 다듬기, 수동 싱크 보정 저장 UX, 위치 정확도 보정 | MV-UI-01·02 | 대기 |
-| **Phase 4** 편집·판본 관리 | 사용자 번역 편집기, TXT/LRC 가져오기, 발음 수정, 원문 갱신, 내보내기/가져오기, 긴 가사 분할 번역 | REQ-ED-*, REQ-LY-04 | 대기 |
+| **Phase 4** 편집·판본 관리 | 사용자 번역 편집기, TXT/LRC 가져오기, 발음 수정, 원문 갱신, 내보내기/가져오기, 긴 가사 분할 번역 | REQ-ED-*, REQ-LY-04, REQ-ST-04, MV-ED-01, MV-ST-02 | **일부 앞당겨 진행(2026-10-05)** — AI 제공자 미정이라 Phase 2 대신 먼저: 번역 직접 입력·고치기, 붙여넣기(TXT·LRC), 발음 고치기, 백업 내보내기·가져오기(core 검증 AT-15·16, 뮤턴트 M16~M19). 남음: TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제, 긴 가사 분할 번역 |
 | **Phase 5** 유료 계정 전환(선택) | Apple Developer Program 가입 시 EAS Build·TestFlight로 전환(7일 재서명 해소) | 설치 1년 유지 | 사용자 결정 대기 |
 | **Phase 6** Android(Apple Music 앱만) | Expo 모듈(Kotlin): NotificationListenerService + MediaSessionManager → PlaybackSource | MV-PB-AND-01·02, MV-PB-CTL-01 | 나중(사용자 결정 2026-10-04) |
 | **Phase 7** 배포 준비 | 약관·권리 검토, 오버레이 검토, 개인정보 처리방침, 스토어 정책 | MV-LEGAL-01, MV-OVL-01, 보안 체크리스트(docs/security.md §10) | 대기 |
@@ -41,6 +41,10 @@
 | D-18 | 가사 자동 조회 3단계: Music 앱 표기로 LRCLIB get → 스토어 ID로 jp·us·kr 표기 조회 후 get → 제목 검색(버전·제목·길이 ±2초 일치). 검색 결과는 **가수 표기가 알려진 표기와 같을 때만 자동 적용**, 아니면 후보를 사용자에게 보여 준다(불변조건 6) | 한국 Apple Music이 일본 곡 제목·가수를 현지화(예: マリーゴールド/あいみょん → Marigold/aimyon, 米津玄師 → 요네즈 켄시) — research §8 | 실기기 적중률(MV-PB-IOS-02) |
 | D-19 | 재생 위치: 화면 표시 중 0.5초 재조회 + 측정 시각을 네이티브 호출 왕복의 중간값으로 보정 | 탐색 알림 없음 대비, 왕복 지연 보정 | 실기기 오차 측정 결과 |
 | D-20 | 가사 줄을 탭하면 Music 앱을 그 줄 위치로 이동(원문 타임스탬프 − 보정값) | Apple Music 가사 화면과 같은 사용 경험 | — |
+| D-21 | 백업 가져오기는 **병합**: 같은 ID는 건너뜀(두 번 가져와도 같음), 기존 데이터 삭제·수정 없음. 스트리밍 곡 연결이 다른 곡을 가리키면 저장 번역 가치(사용자 2 > AI 1 > 없음)가 큰 쪽으로 연결, 같으면 기존 유지. 보정값은 새 곡에만. 표시·자동 번역 설정은 가져오지 않음 | 재설치 후 먼저 재생해 AI 번역이 생긴 경우에도 백업의 사용자 번역이 보여야 하고(불변조건 2·3), 어느 쪽 데이터도 잃지 않아야 함. 자동 번역 동의는 기기에서 다시 받아야 함(REQ-SEC-05) | 사용자가 "백업으로 덮어쓰기"를 원하면 별도 옵션 |
+| D-22 | 번역 편집 화면은 **현재 보이는 번역(내 번역 또는 AI 번역)으로 칸을 채워 시작**, 저장하면 화면 내용 전체가 새 "내 번역" 버전 | 사용자 번역은 AI 번역보다 통째로 우선하므로(불변조건 2·3), 빈 칸으로 시작하면 한 줄만 고쳐도 나머지 줄 번역이 사라져 보인다. AI 결과를 사용자가 확인·채택하는 것은 명시 행동 | — |
+| D-23 | 파일 선택은 `expo-file-system`의 `File.pickFileAsync`, 내보내기는 `expo-sharing` 공유 시트("파일에 저장"). `expo-document-picker`·공유 확장(share extension)·App Group·iCloud 권한은 쓰지 않음(`expo install`이 넣은 `expo-sharing` 설정 플러그인도 제거) | 무료 Apple ID 서명은 App Group·iCloud 권한·추가 번들 ID(확장)에 제약이 있음(ADR-0002). 필요한 기능은 위 두 모듈로 충분 | 유료 계정 전환 시 재검토 |
+| D-24 | iOS 빌드 워크플로: xcodebuild 종료 코드를 그대로 실패로 처리(`\|\| true` 제거), `** BUILD SUCCEEDED **`·실행 파일·`main.jsbundle` 존재 검사 단계 추가, `upload-artifact@v6`(Node 24) | 이전 설정은 `grep ... \|\| true`가 파이프라인 전체 실패를 가려, 컴파일 실패 시에도 빈 `.app` 폴더로 IPA가 만들어질 수 있었음 | — |
 | D-15 | 앱(`apps/mobile`)은 루트 npm 워크스페이스에 넣지 않고 별도 패키지로 둔다(core는 `file:` 의존성 + Metro 설정으로 연결) | 루트 `npm ci`·`npm run check`가 React Native 설치 없이 Windows에서 가볍게 돌도록 | 워크스페이스 통합이 필요해지면 재검토 |
 | D-16 | (D-17로 폐기, 수동 모드 코드 제거) iOS에서 Spotify·YouTube Music은 수동 모드: LRCLIB 검색 → 들리는 줄 탭 → 앱 시계로 진행, 화면에 "수동 싱크" 표시 | 공개 API 없음(platform-support §2.5), 진행을 꾸며내지 않는다는 불변조건 5 | — |
 
@@ -51,7 +55,8 @@
 - Android Gradle의 한글 경로 문제: 커뮤니티 근거만 있음, Phase 1에서 확인.
 
 **iOS 빌드·설치(2026-10-04 추가)**
-- Swift 모듈(`apps/mobile/modules/now-playing/ios/NowPlayingModule.swift`) 컴파일: 미확인(클라우드는 Linux). GitHub Actions 첫 빌드에서 확인.
+- Swift 모듈 컴파일: GitHub Actions 첫 빌드(2026-10-04, run 37206780465)가 성공하고 IPA(8.15MB)를 만들었다. 다만 그 워크플로는 xcodebuild 실패를 가릴 수 있었으므로(D-24) **수정한 워크플로의 다음 빌드에서 `BUILD SUCCEEDED`·실행 파일·JS 번들 검사가 통과해야 확정**.
+- 편집·백업 화면(2026-10-05): 앱 타입 검사·iOS JS 번들(Metro, 710 모듈)·`expo prebuild` 통과(클라우드 Linux). 실기기 미확인(MV-ED-01, MV-ST-02).
 - 확인한 것: 앱 TypeScript 타입 검사 통과, `expo export --platform ios`(Metro로 core 포함 JS 번들 생성) 성공, `expo prebuild --platform ios` 성공(Info.plist 권한 문구 반영), 자동링크가 `NowPlaying` 모듈을 찾음.
 - Sideloadly 무료 서명 설치·7일 재서명 후 데이터·Keychain 유지 여부: 미확인(MV-IOS-INSTALL-01).
 - iTunes Search의 jp·us 스토어 ID로 한국 계정에서 `setQueue` 재생 가능 여부: 미확인(MV-PB-IOS-03).
@@ -68,7 +73,8 @@
 **권리·약관** — docs/platform-support.md §5 전체.
 
 ## 5. 사용자에게 확인이 필요한 사항
+0. 사용자 PC 준비(2026-10-05 확인): Sideloadly, iTunes·iCloud(Apple 웹사이트 버전), GitHub Desktop 설치됨. GitHub 공개 저장소 `alsrb417352-glitch/lyrics-companion`. 다음: iPhone 설치(docs/ios-install.md §2-3~§4).
 1. ~~주 사용 기기~~ → **답변(2026-10-04)**: iPhone, Mac 없음, 유료 개발자 계정은 우선 무료로 시도, Android는 나중.
-2. 사용할 AI 제공자(첫 실제 어댑터 우선순위). 현재 앱은 OpenAI 호환 방식만 지원.
+2. 사용할 AI 제공자(첫 실제 어댑터 우선순위). 현재 앱은 OpenAI 호환 방식만 지원. **2026-10-05 답변: 아직 미정** → 편집·백업(Phase 4 일부)을 먼저 진행.
 3. 배포 의도(개인 사용 vs 공개 배포) — 권리 검토 범위가 달라진다.
 4. GitHub 저장소 공개/비공개 — 비공개면 macOS 빌드 사용량·과금 확인 필요(docs/ios-install.md §1).

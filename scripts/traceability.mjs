@@ -6,7 +6,7 @@
 // 규칙:
 //   - core 상태가 verified/partial이면 [REQ-ID] 태그가 붙은 자동 테스트가 1개 이상 있어야 하고, 결과가 있으면 모두 통과해야 한다.
 //   - 테스트 태그는 레지스트리에 있는 ID만 쓸 수 있다.
-//   - AT-01~AT-14는 모두 테스트로 존재하고 통과해야 한다.
+//   - acceptanceTests의 모든 AT는 테스트로 존재하고 통과해야 한다.
 //   - implementation 경로가 실제로 있어야 하고, manual ID는 docs/testing.md에 정의되어 있어야 한다.
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -95,8 +95,12 @@ for (const r of reg.requirements) {
   }
 }
 const atIds = new Set(reg.acceptanceTests.map((a) => a.id));
-for (let i = 1; i <= 14; i++) {
-  const id = `AT-${String(i).padStart(2, '0')}`;
+// AT-01~14(Phase 0 필수)는 항상, 이후 추가된 AT는 레지스트리에 있는 만큼 검사한다.
+const requiredAts = new Set([
+  ...Array.from({ length: 14 }, (_, i) => `AT-${String(i + 1).padStart(2, '0')}`),
+  ...atIds,
+]);
+for (const id of requiredAts) {
   if (!atIds.has(id)) err(`${id}: acceptanceTests에 정의되지 않았습니다`);
   if (!tagIndex.has(id)) err(`${id}: 자동 테스트가 없습니다`);
   if (results) {
@@ -177,5 +181,5 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(
-  `추적성 검사 통과: 요구사항 ${reg.requirements.length}개, 테스트 파일 ${testFiles.length}개, AT 14개${results ? ', 최근 결과 반영' : ''}`,
+  `추적성 검사 통과: 요구사항 ${reg.requirements.length}개, 테스트 파일 ${testFiles.length}개, AT ${requiredAts.size}개${results ? ', 최근 결과 반영' : ''}`,
 );

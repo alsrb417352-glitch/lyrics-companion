@@ -383,31 +383,37 @@
       "id": "REQ-ED-01",
       "title": "사용자 번역 직접 입력·붙여넣기·수정·저장",
       "core": "verified",
-      "app": "not-started",
+      "app": "partial",
       "design": "docs/product.md 흐름 F5",
       "implementation": [
         "packages/core/src/session/now-playing-session.ts",
-        "packages/core/src/import/user-translation-import.ts"
+        "packages/core/src/import/user-translation-import.ts",
+        "apps/mobile/src/ui/EditScreen.tsx"
       ],
-      "manual": []
+      "manual": ["MV-ED-01"]
     },
     {
       "id": "REQ-ED-02",
       "title": "TXT/LRC 가져오기, 행 수·시간 불일치 시 자동 끼워 맞추지 않고 미리보기·수동 연결",
       "core": "verified",
-      "app": "not-started",
+      "app": "partial",
       "design": "docs/product.md 흐름 F5",
-      "implementation": ["packages/core/src/import/user-translation-import.ts"],
-      "manual": []
+      "implementation": ["packages/core/src/import/user-translation-import.ts", "apps/mobile/src/ui/EditScreen.tsx"],
+      "manual": ["MV-ED-01"]
     },
     {
       "id": "REQ-ED-03",
       "title": "일본어 발음(한글 독음) 행별 사용자 수정",
-      "core": "partial",
-      "app": "not-started",
+      "core": "verified",
+      "app": "partial",
       "design": "docs/product.md 발음 정의",
-      "implementation": ["packages/core/src/storage/lyrics-store.ts"],
-      "manual": []
+      "implementation": [
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/import/user-pronunciation.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "apps/mobile/src/ui/EditScreen.tsx"
+      ],
+      "manual": ["MV-ED-01"]
     },
     {
       "id": "REQ-ST-01",
@@ -439,6 +445,20 @@
       "design": "docs/architecture.md §7, docs/security.md 저장·백업",
       "implementation": ["packages/core/src/storage/migrations.ts"],
       "manual": ["MV-ST-01"]
+    },
+    {
+      "id": "REQ-ST-04",
+      "title": "사용자 데이터 백업 내보내기·가져오기: 불신 파일 검증(해시·참조·크기), 기존 데이터 보존 병합, 원자적 저장, 키·동의 미포함",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/architecture.md §7, docs/security.md 저장·백업",
+      "implementation": [
+        "packages/core/src/backup/backup-file.ts",
+        "packages/core/src/storage/lyrics-store.ts",
+        "apps/mobile/src/adapters/backup-files.ts",
+        "apps/mobile/src/ui/BackupSection.tsx"
+      ],
+      "manual": ["MV-ST-02"]
     },
     {
       "id": "REQ-SEC-01",
@@ -521,13 +541,15 @@
       "id": "REQ-SEC-08",
       "title": "사용자 파일 안전한 읽기, 로컬 저장소 접근 보호·백업·삭제 정책",
       "core": "partial",
-      "app": "not-started",
+      "app": "partial",
       "design": "docs/security.md 저장·백업",
       "implementation": [
         "packages/core/src/import/user-translation-import.ts",
-        "packages/core/src/storage/lyrics-store.ts"
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/backup/backup-file.ts",
+        "apps/mobile/src/adapters/backup-files.ts"
       ],
-      "manual": ["MV-SEC-01"]
+      "manual": ["MV-SEC-01", "MV-ST-02"]
     },
     {
       "id": "REQ-LEGAL-01",
@@ -595,6 +617,14 @@
     {
       "id": "AT-14",
       "title": "저장소 마이그레이션 후 사용자 번역·설정 유지"
+    },
+    {
+      "id": "AT-15",
+      "title": "백업을 새 설치본에 가져오면 AI·가사 요청 없이 같은 번역 표시, 사용자 번역 우선 병합"
+    },
+    {
+      "id": "AT-16",
+      "title": "손상·변조된 백업 거부, 가져오기 실패 시 부분 반영 없음"
     }
   ]
 }

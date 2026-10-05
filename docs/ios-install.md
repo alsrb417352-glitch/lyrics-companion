@@ -39,7 +39,7 @@ Mac과 유료 개발자 계정 없이 이 앱을 iPhone에 설치하는 절차�
 ## 2. 앱 빌드하기
 1. GitHub 웹에서 저장소 → **Actions** 탭 → 왼쪽 `ios-unsigned-ipa` → **Run workflow** → Run.
    (이후에는 `main`에 앱 코드를 올릴 때마다 자동으로 빌드된다.)
-2. 20~40분 기다린다. `core-check`(검사) → `build-ios`(iOS 빌드) 순서로 진행된다.
+2. 5~40분 기다린다(첫 빌드 실측 약 5분, macOS 러너 대기 시간에 따라 달라짐). `core-check`(검사) → `build-ios`(iOS 빌드) 순서로 진행된다.
 3. 끝나면 실행 화면 아래 **Artifacts**의 `lyrics-companion-ios-unsigned`를 내려받아 압축을 푼다 → `LyricsCompanion-0.1.0-<번호>-unsigned.ipa`
 4. 실패하면 `xcodebuild-log`를 내려받아 Claude에게 보여 준다(첫 빌드는 Swift 코드를 처음 컴파일하는 단계라 실패할 수 있다).
 
@@ -61,7 +61,7 @@ Mac과 유료 개발자 계정 없이 이 앱을 iPhone에 설치하는 절차�
 - **같은 Apple ID, 같은 .ipa(또는 새 빌드)** 로 §4를 다시 하면 된다.
 - Sideloadly의 자동 갱신 기능을 켜 두면, PC에서 Sideloadly가 실행 중이고 iPhone이 같은 Wi-Fi에 있을 때 자동으로 다시 서명한다.
 - 무료 Apple ID 제한: 동시에 설치된 사이드로드 앱 최대 3개, 7일에 새 앱 ID 10개.
-- 재설치 후에도 저장 데이터·API 키가 유지되는지는 아직 확인하지 않았다(MV-IOS-INSTALL-01에서 확인 예정). 중요한 사용자 번역은 내보내기 기능이 생기기 전까지 주의한다.
+- 재설치 후에도 저장 데이터·API 키가 유지되는지는 아직 확인하지 않았다(MV-IOS-INSTALL-01에서 확인 예정). 앱을 지우거나 다시 깔기 전에 **설정 › 백업 › 백업 파일 만들기**로 "파일에 저장"해 두고, 재설치 후 **백업 가져오기**로 되살린다(API 키는 백업에 없으므로 다시 입력).
 
 ## 6. 보안 주의
 - Sideloadly는 Apple 공식 도구가 아니며 Apple ID로 로그인해야 서명할 수 있다. **음악 구독·사진·결제에 쓰는 주 계정 대신 서명 전용 Apple ID**를 만들어 쓰는 것을 권장한다. 서명용 계정과 iPhone에 로그인된 계정은 달라도 된다.

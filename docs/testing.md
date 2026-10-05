@@ -37,7 +37,7 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 | 종류 | 위치 | 내용 |
 |---|---|---|
 | 단위 | `packages/core/test/unit/` | LRC 파서, SHA-256, 언어 감지, 가나→한글, 프롬프트·응답 검증 계약, LRCLIB 클라이언트, 가져오기, 마스킹, 표시 구성 |
-| 수용 | `packages/core/test/acceptance/` | AT-01~AT-14 + 판본·버전 관리. 실제 core 객체를 하네스로 조립 |
+| 수용 | `packages/core/test/acceptance/` | AT-01~AT-16 + 판본·버전 관리·사용자 발음 편집. 실제 core 객체를 하네스로 조립 |
 | 스크립트 | `scripts/test/` | 비밀정보 검사기 |
 | 하네스 | `packages/core/test/support/` | `FakeClock`, `FakeHttp`, `FakeTranslationProvider`(지연·오류·거절 주입), `MemorySecretStore`, `MemorySink`, `NodeSqliteDriver`(저장 실패·지연 주입), `createHarness().restart()`(앱 재실행 재현) |
 | 데이터 | `fixtures/` | **합성 데이터만**: 가사(`lyrics/`), LRCLIB 응답(`lrclib/`), AI 응답(`ai/`), 재생 이벤트(`playback/`), 사용자 번역 파일(`import/`). 실제 곡 가사·실제 키 금지 |
@@ -59,6 +59,8 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 | AT-12 | 잘못된 AI 응답 7종, 부분 유효 응답, 저장 실패 롤백, 거절 플래그 | acceptance/failure-handling |
 | AT-13 | 로그·작업 이력·내보내기·DB 파일에 키 없음(제공자가 키를 되돌려 주는 경우 포함), 키 교체·삭제, HTTPS 강제, 프롬프트 인젝션 분리 | acceptance/security-and-migration |
 | AT-14 | v1→v2 마이그레이션 후 사용자 번역·설정·보정값 유지, 실패 시 롤백, 새 스키마 거부 | acceptance/security-and-migration |
+| AT-15 | 백업 → 새 설치본 가져오기 후 같은 번역·보정값이 AI·가사 요청 0회로 표시. 재설치 후 생긴 AI 번역보다 백업의 사용자 번역 우선, 기기의 사용자 번역은 백업 AI로 가려지지 않음, 두 번 가져와도 중복 없음, 자동 번역 동의·제공자 설정·키는 백업에 없고 가져와도 켜지지 않음 | acceptance/backup |
+| AT-16 | 원문·타임스탬프 변조(해시 불일치)·형식·참조·크기·새 스키마 백업 거부, 가져오기 도중 저장 실패 시 아무것도 반영 안 됨 | acceptance/backup |
 
 요구사항별 연결은 [`traceability.md`](traceability.md)(자동 생성)와 실행 결과 `reports/harness/traceability-run.md`에서 확인한다.
 
@@ -93,5 +95,7 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 - **MV-AI-02** 번역·발음 품질 평가: 합성 가사 + 사용자가 권리를 가진(또는 개인 감상용) 곡 샘플 5곡. 평가표: 행 대응, 의미 정확, 화자·정서, 반복 일관성, 추가 내용 없음, 혼합 언어, 한자 읽기 정확도, 한글 독음 자연스러움(1–5점). 실제 가사는 `local-data/`에만 두고 저장소에 올리지 않는다.
 - **MV-SEC-01** 실기기 보안: 키가 보안 저장소에만 있는지(앱 데이터 백업·DB 파일·로그·내보내기 파일 검색), Android Auto Backup 제외, iOS 재설치 후 잔존 키 처리, http 요청 차단.
 - **MV-ST-01** 업데이트 후 데이터 유지: 이전 버전 설치 → 번역·설정 저장 → 새 버전으로 업데이트(마이그레이션) → 데이터·설정 유지, 마이그레이션 사본 생성 확인. 캐시 삭제 후에도 유지.
+- **MV-ST-02** 백업 실기기 확인: 설정 › 백업 파일 만들기 → 공유 시트 "파일에 저장"(iCloud Drive 또는 나의 iPhone) → 앱 삭제·재설치(또는 다른 iPhone) → 백업 가져오기 → 미리보기 숫자 확인 → 가져오기 → 같은 곡 재생 시 내 번역·보정값 표시, AI 요청 0회(설정의 오늘 요청 수 변화 없음). 백업 파일을 텍스트 편집기로 열어 키·제공자 주소가 없는지 확인.
+- **MV-ED-01** 편집 실기기 확인: 번역 직접 입력·고치기(긴 가사에서 키보드가 입력칸을 가리지 않는지), 붙여넣기(TXT 행 수 일치·불일치, LRC), 발음 고치기 → 저장 후 화면 반영, 재실행 후 유지.
 - **MV-OVL-01** 오버레이 가능성(Android): 권한 흐름, 다른 앱 위 표시 동작, Google Play 정책 조항 확인 후 제공 여부 결정.
 - **MV-LEGAL-01** 약관·권리 검토: docs/platform-support.md §5 표의 각 항목에 대해 원문 조항·해석·결론·확인 날짜 기록(법률 자문 필요 여부 포함).

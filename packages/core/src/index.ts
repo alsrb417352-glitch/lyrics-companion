@@ -25,6 +25,8 @@ export * from './storage/lyrics-store.js';
 export * from './sync/sync-engine.js';
 export * from './display/compose.js';
 export * from './import/user-translation-import.js';
+export * from './import/user-pronunciation.js';
+export * from './backup/backup-file.js';
 export * from './session/now-playing-session.js';
 export * from './catalog/itunes-catalog.js';
 export * from './playback/ios-system-player.js';

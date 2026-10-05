@@ -4,6 +4,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import type { SessionState, SkipReason, TranslationOutcome } from '@lyrics-companion/core';
 import type { AppServices } from '../services';
 import { Button, Chip, Note } from './common';
+import { EditScreen, type EditMode } from './EditScreen';
 import { LyricsList } from './LyricsList';
 import { LyricsPicker } from './LyricsPicker';
 import type { Theme } from './theme';
@@ -49,6 +50,7 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   const s: SessionState = useSessionState(session);
   const [tick, setTick] = useState('');
   const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState<EditMode | null>(null);
 
   // 화면 갱신 주기: 활성 행·모드가 바뀔 때만 다시 그린다.
   useEffect(() => {
@@ -77,8 +79,11 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   const unknownPending = s.lastOutcome?.kind === 'skipped' && s.lastOutcome.reason === 'unknown-outcome-pending';
 
   // ---------- 권한·연동 상태
-  // 곡이 바뀌면 가사 고르기 화면을 닫는다
-  useEffect(() => setPicking(false), [s.generation]);
+  // 곡이 바뀌면 가사 고르기·편집 화면을 닫는다(다른 곡 가사에 저장되지 않게)
+  useEffect(() => {
+    setPicking(false);
+    setEditing(null);
+  }, [s.generation]);
 
   if (services.playback && pb.access !== 'granted') {
     return (
@@ -100,6 +105,20 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           </Note>
         )}
       </View>
+    );
+  }
+
+  if (editing && s.lyrics && s.phase === 'ready') {
+    return (
+      <EditScreen
+        services={services}
+        theme={theme}
+        mode={editing}
+        lyrics={s.lyrics}
+        translation={s.translation}
+        pronunciation={s.pronunciation}
+        onDone={() => setEditing(null)}
+      />
     );
   }
 
@@ -275,6 +294,17 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
               ) : null}
               <Button theme={theme} label="가사 바꾸기" onPress={() => setPicking(true)} />
             </View>
+            {s.lyrics && s.lyrics.kind !== 'instrumental' && s.translationStatus !== 'pending' ? (
+              <View style={[styles.rowWrap, { marginTop: 6 }]}>
+                <Button
+                  theme={theme}
+                  label={s.translation?.origin === 'user' ? '내 번역 고치기' : '번역 직접 입력'}
+                  onPress={() => setEditing('translation')}
+                  style={{ marginRight: 8 }}
+                />
+                {isJa ? <Button theme={theme} label="발음 고치기" onPress={() => setEditing('pronunciation')} /> : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
 

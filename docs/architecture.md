@@ -137,4 +137,6 @@ idle → resolving → (needs-confirmation → [confirm|reject]) → loading-lyr
 - 화면(`src/ui/`): 지금 재생(가사·원문/발음/번역·보정·재생 제어·번역 요청·곡/가사 후보 확인·가사 바꾸기), 검색(Apple Music·보관함), 설정(제공자·키·자동 번역 동의·오늘 사용량).
 - 재생 갱신: 곡 변경 알림 + 화면 표시 중 0.5초 재조회(탐색 반영, 측정 시각은 왕복 중간값, D-19), 백그라운드에서는 조회하지 않음. 화면 계산은 250ms 주기로 활성 행이 바뀔 때만 다시 그린다.
 - Apple Music 전용(D-17). 가사 조회는 core `AppleMusicLyricsProvider`(D-18), 확정 못 한 후보는 `NowPlayingSession.lyricsCandidates` → 사용자가 `chooseLyricsRecord`로 선택. 줄 탭 → Music 앱 탐색(D-20).
-- 남은 것: Android 모듈(Kotlin, Phase 6), 번역 편집·가져오기·내보내기 화면(Phase 4).
+- 편집(2026-10-05): `EditScreen` — 번역 직접 입력·고치기(현재 보이는 번역으로 채워 시작, 붙여넣기 TXT·LRC는 core `previewTxtImport`/`previewLrcImport`가 정확히 맞을 때만 칸 채움), 발음(한글 독음) 고치기(core `buildUserPronunciation`: 바꾼 행만 kana=null). 저장은 `NowPlayingSession.saveUserTranslation`/`saveUserPronunciation`(새 버전 추가, AI 호출 없음).
+- 백업(2026-10-05): `adapters/backup-files.ts`(expo-file-system 쓰기·파일 선택 + expo-sharing 공유 시트) → core `parseBackup`(검증) → `LyricsStore.importUserData`(원자적 병합) → `NowPlayingSession.reloadCurrent()`. 공유 확장(share extension)·iCloud 권한은 쓰지 않는다(무료 서명, D-23).
+- 남은 것: Android 모듈(Kotlin, Phase 6), TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제(Phase 4).

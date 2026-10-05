@@ -16,6 +16,7 @@ import { selectPronunciation, selectTranslation } from '../translation/selection
 import type { TranslationOutcome, TranslationService } from '../translation/translation-service.js';
 import { composeLyricsView, type LyricsScreenView } from '../display/compose.js';
 import { validateUserMapping } from '../import/user-translation-import.js';
+import { buildUserPronunciation } from '../import/user-pronunciation.js';
 
 /**
  * 현재 곡 세션: 재생 정보 → 곡 식별 → 가사(저장본 우선) → 번역 정책 → 화면 상태.
@@ -353,6 +354,40 @@ export class NowPlayingSession {
     });
     await this.refreshTexts(lv, gen);
     return { ok: true };
+  }
+
+  /**
+   * 사용자 발음(한글 독음) 저장: 새 버전으로 추가하고 기존 버전은 보존한다(REQ-ED-03).
+   * AI를 호출하지 않는다.
+   */
+  async saveUserPronunciation(edited: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
+    const lv = this.state.lyrics;
+    if (!lv) return { ok: false, error: '가사가 없습니다' };
+    const gen = this.state.generation;
+    const built = buildUserPronunciation(lv, edited, this.state.pronunciation);
+    if (!built.ok) return { ok: false, error: built.error };
+    await this.deps.store.saveUserPronunciation({
+      id: this.deps.ids.next('pr'),
+      lyricsVersionId: lv.id,
+      origin: 'user',
+      lines: built.lines,
+      sourceTextHash: lv.textHash,
+      provenance: null,
+      createdAtEpochMs: this.deps.clock.nowEpochMs(),
+    });
+    await this.refreshTexts(lv, gen);
+    return { ok: true };
+  }
+
+  /**
+   * 저장소가 밖에서 바뀐 뒤(백업 가져오기) 현재 곡을 저장소 기준으로 다시 연다.
+   * 일반 재생과 같은 경로라서 저장된 번역이 있으면 AI를 부르지 않는다(불변조건 1).
+   */
+  async reloadCurrent(): Promise<void> {
+    const display = await this.deps.store.getDisplaySettings();
+    this.update({ display });
+    const ref = this.state.track;
+    if (ref) await this.onTrackChanged(ref);
   }
 
   /** 표시 설정 변경: 저장 + 화면 재구성만. 네트워크·AI 호출 없음. */

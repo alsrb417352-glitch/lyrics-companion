@@ -5,7 +5,7 @@
 
 ## 현재 상태
 Phase 0 완료: `packages/core`(플랫폼 독립 로직) + 검증 하네스.
-Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. 앱 타입 검사·JS 번들·prebuild 확인, **Swift 컴파일·실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
+Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions 첫 iOS 빌드 성공(2026-10-04, IPA 생성 — 단 그때 워크플로는 xcodebuild 실패를 가릴 수 있어 수정함, 다음 빌드에서 재확인). 편집·백업 화면 추가(2026-10-05). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
 1. 저장된 번역(사용자·AI)이 있으면 재생·재시작·표시 변경·모델/프롬프트/제공자 변경으로 AI를 호출하지 않는다.
@@ -30,7 +30,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 15개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 19개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 
