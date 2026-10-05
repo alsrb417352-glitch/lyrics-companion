@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-05T15:44:07.710Z",
+  "startedAt": "2026-10-05T15:46:26.146Z",
   "node": "v22.22.0",
   "platform": "linux-x64",
   "root": "/home/claude/lyrics-companion/",
@@ -11,54 +11,54 @@
       "name": "format",
       "label": "포맷(Prettier)",
       "status": "pass",
-      "durationMs": 3866
+      "durationMs": 4168
     },
     {
       "name": "lint",
       "label": "정적 분석(ESLint, 아키텍처 경계 포함)",
       "status": "pass",
-      "durationMs": 7301
+      "durationMs": 7302
     },
     {
       "name": "typecheck",
       "label": "타입 검사(테스트 포함)",
       "status": "pass",
-      "durationMs": 2793
+      "durationMs": 3067
     },
     {
       "name": "test",
       "label": "핵심 테스트(Vitest: 단위·수용, 가짜 제공자·가짜 시계·실제 SQLite)",
       "status": "pass",
-      "durationMs": 6695
+      "durationMs": 7378
     },
     {
       "name": "build",
       "label": "빌드(core, 플랫폼 타입 없이 컴파일)",
       "status": "pass",
-      "durationMs": 1927
+      "durationMs": 1909
     },
     {
       "name": "app",
       "label": "앱 타입 검사(apps/mobile, 의존성 설치 시에만)",
       "status": "pass",
-      "durationMs": 4034
+      "durationMs": 3818
     },
     {
       "name": "secrets",
       "label": "비밀정보 검사",
       "status": "pass",
-      "durationMs": 94
+      "durationMs": 101
     },
     {
       "name": "trace",
       "label": "요구사항 추적성(요구사항↔테스트↔문서)",
       "status": "pass",
-      "durationMs": 64
+      "durationMs": 68
     }
   ],
   "tests": {
-    "total": 198,
-    "passed": 198,
+    "total": 204,
+    "passed": 204,
     "failed": 0,
     "skipped": 0
   },

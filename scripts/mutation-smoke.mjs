@@ -268,6 +268,38 @@ const MUTANTS = [
     find: 'if (step.transient) consecutiveErrors++;',
     replace: 'consecutiveErrors++;',
   },
+  {
+    id: 'M33',
+    req: 'REQ-TR-06',
+    desc: '번역 묶음 적용 시 저장 직전 "내 번역" 재확인 제거(미리보기 뒤 생긴 내 번역 위에 새 버전 추가)',
+    file: S('batch/translation-bundle.ts'),
+    find: "if ((await store.listTranslations(lv.id)).some((t) => t.origin === 'user')) {\n        report.skippedNow++;",
+    replace: 'if (Math.random() > 2) {\n        report.skippedNow++;',
+  },
+  {
+    id: 'M34',
+    req: 'REQ-ED-05',
+    desc: '번역 묶음 미리보기가 이미 "내 번역"이 있는 곡을 적용 가능으로 표시',
+    file: S('batch/translation-bundle.ts'),
+    find: "if (versions.some((t) => t.origin === 'user')) return { ...item, status: 'has-user-translation' };",
+    replace: '// mutated',
+  },
+  {
+    id: 'M35',
+    req: 'REQ-LY-03',
+    desc: '번역 묶음이 활성 판본이 아닌(바뀐) 가사 판본에도 번역을 적용 가능으로 표시',
+    file: S('batch/translation-bundle.ts'),
+    find: "if (!song || song.activeLyricsVersionId !== lv.id) return { ...item, status: 'lyrics-changed' };",
+    replace: '// mutated',
+  },
+  {
+    id: 'M36',
+    req: 'REQ-ED-05',
+    desc: '번역 묶음 내보내기가 이미 "내 번역"이 있는 곡도 포함',
+    file: S('batch/translation-bundle.ts'),
+    find: "if ((await store.listTranslations(lv.id)).some((t) => t.origin === 'user')) {\n      counts.hasUserTranslation++;\n      continue;\n    }",
+    replace: '// mutated',
+  },
 ];
 
 const vitest = binPath('vitest');

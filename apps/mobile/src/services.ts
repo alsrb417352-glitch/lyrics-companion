@@ -35,6 +35,8 @@ export const LRCLIB_CLIENT_ID = 'LyricsCompanion/0.1.0 (personal-use iOS app)';
  */
 export interface AppServices {
   clock: SystemClock;
+  ids: UuidIds;
+  logger: Logger;
   store: LyricsStore;
   keys: ApiKeyManager;
   translation: TranslationService;
@@ -119,5 +121,5 @@ export async function createAppServices(): Promise<AppServices> {
     if (awake) void activateKeepAwakeAsync('playlist-batch').catch(() => undefined);
     else void deactivateKeepAwake('playlist-batch').catch(() => undefined);
   });
-  return { clock, store, keys, translation, session, lrclib, catalog, playback, playlistBatch, logs };
+  return { clock, ids, logger, store, keys, translation, session, lrclib, catalog, playback, playlistBatch, logs };
 }

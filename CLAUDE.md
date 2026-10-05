@@ -5,7 +5,7 @@
 
 ## 현재 상태
 Phase 0 완료: `packages/core`(플랫폼 독립 로직) + 검증 하네스.
-Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions iOS 빌드 성공(2026-10-05 #3, 빌드 결과 검사 포함 — Swift 모듈 컴파일 확인). 편집·백업 화면 추가(2026-10-05). 플레이리스트 탭(보관함 플레이리스트 바로 재생)·원문 TXT 내보내기·수동 싱크(탭 기록) 추가(2026-10-05, D-28~30). 플레이리스트 가사 원문 일괄 받기 추가(2026-10-05, D-31). LRCLIB 503 과부하 자동 재시도(2026-10-06, D-33). 아이콘 중심 UI 개편(2026-10-05, D-32, react-native-svg). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
+Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions iOS 빌드 성공(2026-10-05 #3, 빌드 결과 검사 포함 — Swift 모듈 컴파일 확인). 편집·백업 화면 추가(2026-10-05). 플레이리스트 탭(보관함 플레이리스트 바로 재생)·원문 TXT 내보내기·수동 싱크(탭 기록) 추가(2026-10-05, D-28~30). 플레이리스트 가사 원문 일괄 받기 추가(2026-10-05, D-31). LRCLIB 503 과부하 자동 재시도(2026-10-06, D-33). 아이콘 중심 UI 개편(2026-10-05, D-32, react-native-svg). 플레이리스트 번역 묶음 파일(번역할 곡 원문 한 파일로 내보내기 → 채운 번역 한 번에 가져오기, 2026-10-06, D-34). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
 1. 저장된 번역(사용자·AI)이 있으면 재생·재시작·표시 변경·모델/프롬프트/제공자 변경으로 AI를 호출하지 않는다.
@@ -30,7 +30,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 32개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 36개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

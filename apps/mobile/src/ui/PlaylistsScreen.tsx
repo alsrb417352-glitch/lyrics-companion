@@ -14,6 +14,7 @@ import { ArtworkTile, Button, IconButton, Note } from './common';
 import { Icon } from './icons';
 import { ITEM_BADGE, PlaylistLyricsBatchPanel, useBatchState } from './PlaylistLyricsBatchPanel';
 import type { Theme } from './theme';
+import { TranslationBundlePanel } from './TranslationBundlePanel';
 import type { PlaybackApi } from './usePlayback';
 
 function mmss(ms: number | null): string {
@@ -29,6 +30,7 @@ function mmss(ms: number | null): string {
  *   재생이 시작되면 지금 재생 탭으로 넘어가고, 곡이 자동 인식되어 가사가 맞춰진다.
  * - MusicKit 카탈로그 API를 쓰지 않으므로(무료 서명, ADR-0002) 보관함에 추가하지 않은 플레이리스트는 보이지 않는다.
  * - 가사 원문 일괄 받기(REQ-LY-05, D-31): 플레이리스트 곡들의 원문을 한 번에 받아 둔다. 곡 옆 ✓는 가사가 저장된 곡.
+ * - 번역 한꺼번에 넣기(REQ-ED-05, D-34): 번역할 곡 원문을 한 파일로 내보내고, 채운 번역을 한 번에 가져온다.
  */
 export function PlaylistsScreen(props: {
   services: AppServices;
@@ -208,6 +210,7 @@ export function PlaylistsScreen(props: {
           tracks={refs}
           savedCount={savedNow ? savedNow.size : null}
         />
+        <TranslationBundlePanel services={services} theme={theme} playlistName={open.name} tracks={refs} />
       </View>
     );
     return (

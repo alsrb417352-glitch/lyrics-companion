@@ -39,3 +39,8 @@ export function plainTextFileName(meta: { title: string; artist: string }): stri
   const artist = safeNamePart(meta.artist, 40);
   return `${artist ? `${title} - ${artist}` : title} (원문).txt`;
 }
+
+/** 플레이리스트 번역 묶음 파일 이름(D-34). 예: "출근길 (번역 묶음).txt" */
+export function translationBundleFileName(playlistName: string): string {
+  return `${safeNamePart(playlistName, 60) || '플레이리스트'} (번역 묶음).txt`;
+}
