@@ -122,7 +122,14 @@ const IDLE: BatchState = {
 };
 
 type Step =
-  | { kind: 'result'; status: BatchItemStatus; songId: string | null; lyricsKind?: LyricsKind }
+  | {
+      kind: 'result';
+      status: BatchItemStatus;
+      songId: string | null;
+      lyricsKind?: LyricsKind;
+      /** 서버·네트워크 쪽 오류(연속 오류 멈춤 판단에 씀). 곡 자체 문제(잘못된 LRC 등)는 false */
+      transient?: boolean;
+    }
   | { kind: 'stop'; reason: BatchStopReason; retryAfterMs?: number };
 
 export class PlaylistLyricsBatch {
@@ -227,7 +234,12 @@ export class PlaylistLyricsBatch {
           retryAfterMs = step.retryAfterMs ?? null;
           break;
         }
-        consecutiveErrors = step.status === 'error' ? consecutiveErrors + 1 : 0;
+        // 서버 쪽 오류만 연속으로 센다. 곡 자체 문제(잘못된 싱크 가사 등)는 서버 상태와 무관하므로 멈춤 사유가 아니다.
+        if (step.status === 'error') {
+          if (step.transient) consecutiveErrors++;
+        } else {
+          consecutiveErrors = 0;
+        }
         const item: BatchItemResult = {
           index,
           title: ref.title,
@@ -313,7 +325,8 @@ export class PlaylistLyricsBatch {
         case 'error': {
           if (res.kind === 'offline') return { kind: 'stop', reason: 'offline' };
           if (res.kind === 'aborted' || signal.aborted) return { kind: 'stop', reason: 'cancelled' };
-          return { kind: 'result', status: 'error', songId: song.id };
+          const transient = res.kind === 'server' || res.kind === 'timeout' || res.kind === 'invalid_response';
+          return { kind: 'result', status: 'error', songId: song.id, transient };
         }
       }
     }

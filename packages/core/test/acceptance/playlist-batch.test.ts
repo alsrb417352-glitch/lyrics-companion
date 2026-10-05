@@ -224,4 +224,55 @@ describe('보관함 곡 → 재생 곡 정보', () => {
       expect(libraryTrackToRef(lib!).service).toBe(now!.service);
     }
   });
+
+  it('[AT-19][REQ-LY-05][REQ-LY-01] 503 과부하가 곡마다 섞여 와도 기다렸다 다시 받아 멈추지 않는다(D-33)', async () => {
+    const h = await harness();
+    // 곡마다 첫 요청은 503 ServerOverloaded(Retry-After: 1) — 실제 LRCLIB에서 관찰한 형태
+    const overloaded = new Set<string>();
+    h.http.prepend(
+      (r) => r.url.includes('/api/get') && !overloaded.has(r.url),
+      (r) => {
+        overloaded.add(r.url);
+        return jsonResponse(503, { name: 'ServerOverloaded', statusCode: 503 }, { 'retry-after': '1' });
+      },
+    );
+    const tracks = [TRACKS.jaStudio, TRACKS.jaPlain, TRACKS.instrumental, UNKNOWN];
+    const batch = batchFor(h);
+    const p = batch.start({ label: 'p', tracks })!;
+    let end: BatchState | undefined;
+    void p.then((s) => (end = s));
+    for (let i = 0; i < 500 && !end; i++) {
+      await new Promise<void>((r) => setImmediate(r));
+      await h.clock.flushSleeps();
+    }
+    expect(end?.stoppedBy).toBe('completed');
+    expect(end?.items.map((i) => i.status)).toEqual(['saved', 'saved', 'saved', 'not-found']);
+    expect(end?.counts.error).toBe(0);
+  });
+
+  it('[AT-19][REQ-LY-05] 곡 자체 문제(잘못된 싱크 가사)는 오류로 기록하되 서버 오류 연속 멈춤으로 세지 않는다', async () => {
+    const h = await harness();
+    h.http.prepend(
+      (r) => r.url.includes('/api/get'),
+      (r) => {
+        const u = new URL(r.url);
+        return jsonResponse(200, {
+          id: 100 + (u.searchParams.get('track_name')?.length ?? 0),
+          trackName: u.searchParams.get('track_name'),
+          artistName: u.searchParams.get('artist_name'),
+          albumName: u.searchParams.get('album_name') ?? '',
+          duration: Number(u.searchParams.get('duration') ?? 0),
+          instrumental: false,
+          plainLyrics: null,
+          syncedLyrics: 'not an lrc at all',
+          hasWordSync: false,
+        });
+      },
+    );
+    const tracks = [TRACKS.jaStudio, TRACKS.jaPlain, TRACKS.enStudio, UNKNOWN];
+    const end = await batchFor(h).start({ label: 'p', tracks });
+    expect(end?.stoppedBy).toBe('completed');
+    expect(end?.done).toBe(4);
+    expect(end?.counts.error).toBe(4);
+  });
 });

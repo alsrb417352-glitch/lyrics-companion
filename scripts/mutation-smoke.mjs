@@ -244,6 +244,30 @@ const MUTANTS = [
     find: "if (res.kind === 'offline') return { kind: 'stop', reason: 'offline' };",
     replace: '// mutated',
   },
+  {
+    id: 'M30',
+    req: 'REQ-LY-01',
+    desc: 'LRCLIB 503 과부하(Retry-After 짧음)를 다시 시도하지 않고 바로 오류로 돌려줌',
+    file: S('lyrics/lrclib-client.ts'),
+    find: 'if (isTransientStatus(r.status) && transientTries < this.maxTransientRetries) {',
+    replace: 'if (isTransientStatus(r.status) && transientTries < 0) {',
+  },
+  {
+    id: 'M31',
+    req: 'REQ-LY-01',
+    desc: '제목 검색 서버 오류를 "가사 없음"으로 잘못 분류',
+    file: S('lyrics/apple-music-lyrics-provider.ts'),
+    find: 'if (searchError) return searchError;',
+    replace: '// mutated',
+  },
+  {
+    id: 'M32',
+    req: 'REQ-LY-05',
+    desc: '일괄 받기가 곡 자체 문제(잘못된 LRC)도 서버 오류 연속으로 세어 멈춤',
+    file: S('batch/playlist-lyrics-batch.ts'),
+    find: 'if (step.transient) consecutiveErrors++;',
+    replace: 'consecutiveErrors++;',
+  },
 ];
 
 const vitest = binPath('vitest');

@@ -90,10 +90,14 @@ export class AppleMusicLyricsProvider implements LyricsProvider {
     const knownArtists = new Set(variants.map((v) => normalizeArtist(v.artist)));
     const titles = [...new Map(variants.map((v) => [parseTitle(v.title).core, v])).values()];
     const pool = new Map<number, LrclibRecord>();
+    let searchError: Extract<LyricsFetchResult, { status: 'error' }> | null = null;
     for (const v of titles) {
       const res = await this.opts.lrclib.search({ trackName: v.title });
       if (res.status === 'rate_limited') return res;
-      if (res.status === 'error') break;
+      if (res.status === 'error') {
+        searchError = { status: 'error', kind: res.kind, message: res.message };
+        break;
+      }
       for (const rec of res.records) {
         if (!hasLyrics(rec)) continue;
         if (durationClose(q.durationMs, Math.round(rec.duration * 1000)) !== true) continue;
@@ -112,6 +116,8 @@ export class AppleMusicLyricsProvider implements LyricsProvider {
     if (ranked.length > 0) {
       return { status: 'not_found', reason: 'no-record', candidates: ranked.slice(0, this.maxCandidates) };
     }
+    // 검색이 서버 오류로 끝났으면 "가사 없음"이 아니라 오류로 알린다(다시 받기에서 재시도되도록, D-33)
+    if (searchError) return searchError;
     return first;
   }
 }
