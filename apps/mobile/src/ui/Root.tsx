@@ -4,15 +4,17 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { createAppServices, type AppServices } from '../services';
 import { NowPlayingScreen } from './NowPlayingScreen';
+import { PlaylistsScreen } from './PlaylistsScreen';
 import { SearchScreen } from './SearchScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { useTheme, type Theme } from './theme';
 import { usePlayback } from './usePlayback';
 
-type Tab = 'now' | 'search' | 'settings';
+type Tab = 'now' | 'playlists' | 'search' | 'settings';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'now', label: '지금 재생' },
+  { id: 'playlists', label: '플레이리스트' },
   { id: 'search', label: '검색' },
   { id: 'settings', label: '설정' },
 ];
@@ -25,6 +27,14 @@ function Main(props: { services: AppServices; theme: Theme }) {
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.bg }]} edges={['top', 'bottom']}>
       <View style={styles.flex}>
         {tab === 'now' ? <NowPlayingScreen services={services} playback={playback} theme={theme} /> : null}
+        {tab === 'playlists' ? (
+          <PlaylistsScreen
+            services={services}
+            playback={playback}
+            theme={theme}
+            onOpenNowPlaying={() => setTab('now')}
+          />
+        ) : null}
         {tab === 'search' ? (
           <SearchScreen services={services} playback={playback} theme={theme} onOpenNowPlaying={() => setTab('now')} />
         ) : null}
@@ -39,7 +49,11 @@ function Main(props: { services: AppServices; theme: Theme }) {
             onPress={() => setTab(t.id)}
             style={styles.tab}
           >
-            <Text style={{ color: tab === t.id ? theme.accent : theme.textDim, fontSize: 15, fontWeight: '700' }}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={{ color: tab === t.id ? theme.accent : theme.textDim, fontSize: 14, fontWeight: '700' }}
+            >
               {t.label}
             </Text>
           </Pressable>
@@ -83,5 +97,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   tabs: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 48 },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    minHeight: 48,
+  },
 });

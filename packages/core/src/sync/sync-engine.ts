@@ -19,7 +19,14 @@ export const DEFAULT_SYNC_CONFIG: SyncConfig = { maxExtrapolationMs: 60_000 };
 export type SyncResult =
   | { mode: 'static'; reason: 'plain' | 'instrumental' }
   | { mode: 'unknown'; reason: 'no-snapshot' | 'no-position' | 'stale' | 'status-unknown' | 'track-mismatch' }
-  | { mode: 'synced'; positionMs: number; activeIndex: number | null; isPlaying: boolean };
+  | {
+      mode: 'synced';
+      positionMs: number;
+      activeIndex: number | null;
+      isPlaying: boolean;
+      /** 재생 중일 때 다음 행으로 넘어가기까지 남은 실제 시간(ms). 화면이 정확히 그 순간 다시 그리도록 쓴다. */
+      nextChangeInMs: number | null;
+    };
 
 /** 측정값과 경과 시간으로 현재 위치 추정. 추정 불가면 null */
 export function estimatePositionMs(
@@ -73,10 +80,13 @@ export function computeSync(input: {
   const est = estimatePositionMs(input.snapshot, input.nowMonotonicMs, input.config);
   if ('unknown' in est) return { mode: 'unknown', reason: est.unknown };
   const t = est.positionMs + input.offsetMs;
-  return {
-    mode: 'synced',
-    positionMs: est.positionMs,
-    activeIndex: findActiveIndex(input.lines, t),
-    isPlaying: input.snapshot.status === 'playing',
-  };
+  const activeIndex = findActiveIndex(input.lines, t);
+  const isPlaying = input.snapshot.status === 'playing';
+  let nextChangeInMs: number | null = null;
+  if (isPlaying) {
+    const next = input.lines[activeIndex === null ? 0 : activeIndex + 1]?.startMs;
+    const rate = Number.isFinite(input.snapshot.rate) && input.snapshot.rate > 0 ? input.snapshot.rate : 1;
+    if (next != null) nextChangeInMs = Math.max(0, (next - t) / rate);
+  }
+  return { mode: 'synced', positionMs: est.positionMs, activeIndex, isPlaying, nextChangeInMs };
 }

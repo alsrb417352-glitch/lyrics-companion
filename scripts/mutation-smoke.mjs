@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 테스트 실효성 점검(뮤테이션 스모크): 핵심 불변조건 코드를 일부러 망가뜨렸을 때 테스트가 실패하는지 확인한다.
 // "항상 통과하는 테스트"를 걸러내기 위한 장치. 원본 파일은 각 시도 후 반드시 복원한다.
-// 사용: npm run check:mutation   (약 30초~1분)
+// 사용: npm run check:mutation   (약 1~2분)
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { binPath, ROOT, runNode } from './lib/common.mjs';
@@ -163,6 +163,62 @@ const MUTANTS = [
     file: S('import/user-pronunciation.ts'),
     find: 'lines[id] = { kana: null, hangul };',
     replace: 'lines[id] = { kana: prev?.kana ?? null, hangul };',
+  },
+  {
+    id: 'M20',
+    req: 'REQ-SY-02',
+    desc: '위치 필터가 가장 늦은 측정을 고름(가사 지연)',
+    file: S('sync/position-filter.ts'),
+    find: 'for (const x of this.samples) if (best === null || x.origin > best) best = x.origin;',
+    replace: 'for (const x of this.samples) if (best === null || x.origin < best) best = x.origin;',
+  },
+  {
+    id: 'M21',
+    req: 'REQ-SY-02',
+    desc: '한 번 늦게 읽힌 값을 탐색으로 보고 바로 따름(가사가 뒤로 튐)',
+    file: S('sync/position-filter.ts'),
+    find: 'if (!prev || Math.abs(prev.origin - origin) >= this.cfg.jumpMs) {',
+    replace: 'if (false as boolean) {',
+  },
+  {
+    id: 'M22',
+    req: 'REQ-TR-01',
+    desc: '추론 모델 요청에 temperature·max_tokens를 그대로 보냄(제공자 오류)',
+    file: S('translation/openai-compatible-provider.ts'),
+    find: '  if (opts.reasoningEffort) {',
+    replace: '  if (opts.reasoningEffort && Math.random() > 2) {',
+  },
+  {
+    id: 'M23',
+    req: 'REQ-SY-05',
+    desc: '수동 싱크를 일부만 기록했을 때 기록하지 않은 행을 0초로 꾸며냄(진행 조작)',
+    file: S('sync/user-timing.ts'),
+    find: 'const NEVER = Number.POSITIVE_INFINITY;',
+    replace: 'const NEVER = 0;',
+  },
+  {
+    id: 'M24',
+    req: 'REQ-SY-05',
+    desc: '탭 기록에서 앞 줄보다 이른 시각을 허용',
+    file: S('sync/user-timing.ts'),
+    find: 'if (ms < prev) return',
+    replace: 'if (ms < prev && Math.random() > 2) return',
+  },
+  {
+    id: 'M25',
+    req: 'REQ-SY-05',
+    desc: '세션이 사용자 싱크 기록을 무시하고 원문 시각만 사용',
+    file: S('session/now-playing-session.ts'),
+    find: 'const value = effectiveTiming(lv, this.state.timing);',
+    replace: 'const value = effectiveTiming(lv, null);',
+  },
+  {
+    id: 'M26',
+    req: 'REQ-ST-04',
+    desc: '백업 가져오기에서 싱크 기록 검증(가사 행·순서) 제거',
+    file: S('backup/backup-file.ts'),
+    find: 'if (!checked.ok) fail(`${w}: ${checked.error}`);\n    lines = checked.lines;',
+    replace: 'lines = raw as Record<string, number>;',
   },
 ];
 

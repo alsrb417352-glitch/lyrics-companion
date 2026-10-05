@@ -162,6 +162,7 @@ describe('AT-15 백업 내보내기·가져오기', () => {
       baseUrl: 'https://api.example.test/v1',
       model: 'm',
       structuredOutput: true,
+      reasoningEffort: 'xhigh',
     });
     const backup2 = JSON.stringify(await a.store.exportUserData(LATEST_SCHEMA_VERSION, a.clock.nowEpochMs()));
     for (const text of [backup, backup2]) {

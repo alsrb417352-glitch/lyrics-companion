@@ -16,6 +16,9 @@ export interface LibraryItemRaw {
   storeId: string;
 }
 
+/** 플레이리스트·곡 원시 값. 검증·정리는 core mapLibraryPlaylists / mapLibraryTracks */
+export type PlaylistRaw = Record<string, unknown>;
+
 type Events = { onChange: (raw: NowPlayingRaw) => void };
 
 export declare class NowPlayingNativeModule extends NativeModule<Events> {
@@ -30,6 +33,9 @@ export declare class NowPlayingNativeModule extends NativeModule<Events> {
   playStoreId(storeId: string): Promise<boolean>;
   searchLibrary(term: string): Promise<LibraryItemRaw[]>;
   playLibraryItem(persistentId: string): Promise<boolean>;
+  listPlaylists(): Promise<PlaylistRaw[]>;
+  playlistItems(playlistId: string): Promise<PlaylistRaw[]>;
+  playPlaylist(playlistId: string, startItemId: string | null, shuffle: boolean): Promise<boolean>;
 }
 
 export const NowPlaying = requireOptionalNativeModule<NowPlayingNativeModule>('NowPlaying');

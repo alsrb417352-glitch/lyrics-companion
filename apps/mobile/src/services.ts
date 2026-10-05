@@ -18,6 +18,12 @@ import { ExpoSecretStore } from './adapters/secure-store';
 import { ExpoSqliteDriver } from './adapters/sqlite-driver';
 import { RingLogSink, SystemClock, UuidIds } from './adapters/system';
 
+/**
+ * 전체 싱크 보정 기본값: 가사를 0.25초 먼저 넘긴다(D-26). LRC 시각은 노래가 시작되는 순간이라, 그때 바뀌면
+ * 읽기 시작이 늦게 느껴진다. 원문 타임스탬프는 바꾸지 않는 표시용 보정이며 설정에서 바꿀 수 있다.
+ */
+export const DEFAULT_LYRICS_LEAD_MS = 250;
+
 /** LRCLIB 문서가 요구하는 클라이언트 식별 문자열(앱 이름·버전·용도) */
 export const LRCLIB_CLIENT_ID = 'LyricsCompanion/0.1.0 (personal-use iOS app)';
 
@@ -57,6 +63,7 @@ class ConfiguredProviderRegistry implements TranslationProviderRegistry {
       baseUrl: cfg.baseUrl,
       model: cfg.model,
       structuredOutput: cfg.structuredOutput,
+      reasoningEffort: cfg.reasoningEffort,
       http: this.deps.http,
       keys: this.deps.keys,
       logger: this.deps.logger,
@@ -93,6 +100,7 @@ export async function createAppServices(): Promise<AppServices> {
     clock,
     ids,
     logger,
+    defaultGlobalOffsetMs: DEFAULT_LYRICS_LEAD_MS,
   });
   await session.start();
   const playback = IosMusicPlaybackSource.available() ? new IosMusicPlaybackSource(clock) : null;

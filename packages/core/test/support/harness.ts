@@ -159,6 +159,8 @@ export interface HarnessOptions {
   secretStore?: MemorySecretStore;
   clock?: FakeClock;
   ids?: IdGenerator;
+  /** 세션의 전체 싱크 보정 기본값(앱은 D-27 값을 넘긴다) */
+  defaultGlobalOffsetMs?: number;
 }
 
 export async function createHarness(opts: HarnessOptions = {}): Promise<Harness> {
@@ -194,6 +196,7 @@ export async function createHarness(opts: HarnessOptions = {}): Promise<Harness>
     clock,
     ids,
     logger,
+    ...(opts.defaultGlobalOffsetMs !== undefined ? { defaultGlobalOffsetMs: opts.defaultGlobalOffsetMs } : {}),
   });
   await session.start();
   const h: Harness = {
@@ -215,7 +218,14 @@ export async function createHarness(opts: HarnessOptions = {}): Promise<Harness>
     async restart() {
       await session.idle();
       await store.close();
-      return createHarness({ dbPath, secretStore, clock, ids, ...(opts.policy ? { policy: opts.policy } : {}) });
+      return createHarness({
+        dbPath,
+        secretStore,
+        clock,
+        ids,
+        ...(opts.policy ? { policy: opts.policy } : {}),
+        ...(opts.defaultGlobalOffsetMs !== undefined ? { defaultGlobalOffsetMs: opts.defaultGlobalOffsetMs } : {}),
+      });
     },
     async close() {
       await session.idle();

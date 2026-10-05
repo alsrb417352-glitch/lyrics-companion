@@ -3,15 +3,20 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import type { SessionState, SkipReason, TranslationOutcome } from '@lyrics-companion/core';
 import type { AppServices } from '../services';
+import { exportLyricsText } from '../adapters/text-export';
 import { Button, Chip, Note } from './common';
 import { EditScreen, type EditMode } from './EditScreen';
 import { LyricsList } from './LyricsList';
 import { LyricsPicker } from './LyricsPicker';
+import { SyncRecordScreen } from './SyncRecordScreen';
 import type { Theme } from './theme';
 import type { PlaybackApi } from './usePlayback';
 import { useSessionState } from './useSessionState';
 
-const TICK_MS = 250;
+/** 다음 행 전환 시각을 모를 때의 최대 재확인 간격 */
+const MAX_TICK_MS = 250;
+/** 곡별 보정 버튼 한 번에 움직이는 양 */
+const OFFSET_STEP_MS = 100;
 
 const SKIP_TEXT: Record<SkipReason, string> = {
   'no-lyrics': '가사가 없어 번역하지 않았습니다.',
@@ -51,16 +56,30 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   const [tick, setTick] = useState('');
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<EditMode | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [toolMsg, setToolMsg] = useState<{ text: string; danger?: boolean } | null>(null);
 
-  // 화면 갱신 주기: 활성 행·모드가 바뀔 때만 다시 그린다.
+  // 화면 갱신: 다음 행이 시작되는 바로 그 순간에 맞춰 다시 확인한다(고정 주기로 기다리지 않음, D-25).
+  // 싱크 계산(이진 탐색)만 하고, 활성 행·모드가 바뀔 때만 다시 그린다.
   useEffect(() => {
-    const id = setInterval(() => {
-      const v = session.screen(pb.latest());
-      const key = v ? `${v.mode}|${v.activeIndex ?? '-'}` : 'none';
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const loop = () => {
+      if (!alive) return;
+      const r = session.syncFor(pb.latest());
+      const key = r.mode === 'synced' ? `synced|${r.activeIndex ?? '-'}` : `${r.mode}|${r.reason}`;
       setTick((prev) => (prev === key ? prev : key));
-    }, TICK_MS);
-    return () => clearInterval(id);
-  }, [session, pb.latest]);
+      let delay = MAX_TICK_MS;
+      if (r.mode === 'synced' && r.nextChangeInMs !== null) delay = Math.min(delay, r.nextChangeInMs + 5);
+      timer = setTimeout(loop, Math.max(5, delay));
+    };
+    loop();
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [session, pb.latest, s]);
 
   // tick·세션 상태가 바뀔 때만 화면 구성을 다시 계산한다.
   const view = useMemo(() => session.screen(pb.latest()), [s, tick, pb.latest, session]);
@@ -83,7 +102,28 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   useEffect(() => {
     setPicking(false);
     setEditing(null);
+    setRecording(false);
+    setToolMsg(null);
   }, [s.generation]);
+
+  // 싱크에 쓰는 시간: 내가 기록한 싱크가 있으면 그것, 없으면 원문 타임스탬프(D-28)
+  const timing = useMemo(() => session.timingView(), [s, session]);
+  const timedKind = timing?.kind ?? null;
+  const canRecord = !!control && !!s.lyrics && s.lyrics.kind !== 'instrumental';
+
+  const exportText = async () => {
+    if (!s.lyrics) return;
+    setToolMsg(null);
+    try {
+      const r = await exportLyricsText(s.lyrics, {
+        title: s.track?.title ?? s.song?.title ?? '',
+        artist: s.track?.artist ?? s.song?.artist ?? '',
+      });
+      setToolMsg({ text: `원문 ${r.lines}줄을 내보냈습니다(${r.fileName}).` });
+    } catch (e) {
+      setToolMsg({ text: e instanceof Error ? e.message : '내보내지 못했습니다', danger: true });
+    }
+  };
 
   if (services.playback && pb.access !== 'granted') {
     return (
@@ -122,6 +162,18 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
     );
   }
 
+  if (recording && s.lyrics && s.phase === 'ready') {
+    return (
+      <SyncRecordScreen
+        services={services}
+        playback={pb}
+        theme={theme}
+        lyrics={s.lyrics}
+        onDone={() => setRecording(false)}
+      />
+    );
+  }
+
   if (picking && s.song) {
     return (
       <LyricsPicker
@@ -152,8 +204,10 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           {view?.mode === 'position-unknown'
             ? 'Music 앱 연동 · 재생 위치를 알 수 없어 진행을 표시하지 않습니다'
             : view?.mode === 'static'
-              ? 'Music 앱 연동 · 이 가사에는 시간 정보가 없어 자동 싱크를 할 수 없습니다'
-              : 'Music 앱 연동 · 자동 싱크'}
+              ? '이 가사에는 시간 정보가 없습니다 · "싱크 직접 기록"으로 맞출 수 있습니다'
+              : timing?.source === 'user'
+                ? 'Music 앱 연동 · 내가 기록한 싱크'
+                : 'Music 앱 연동 · 자동 싱크'}
         </Text>
       </View>
 
@@ -212,12 +266,13 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
         <LyricsList
           theme={theme}
           view={view}
-          {...(s.lyrics?.kind === 'synced' && control
+          {...(timedKind === 'synced' && control
             ? {
-                // 줄을 탭하면 Music 앱을 그 위치로 이동(원문 타임스탬프 + 보정값 기준)
+                // 줄을 탭하면 Music 앱을 그 위치로 이동(원문 타임스탬프 또는 내 기록 + 보정값 기준)
                 onPressLine: (i: number) => {
-                  const start = s.lyrics?.lines[i]?.startMs;
-                  if (start != null) void control.seekTo(Math.max(0, start - s.offsetMs)).then(pb.refresh);
+                  const start = session.lineStartMs(i);
+                  if (start != null)
+                    void control.seekTo(Math.max(0, start - s.offsetMs - s.globalOffsetMs)).then(pb.resync);
                 },
               }
             : {})}
@@ -242,20 +297,25 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
               on={s.display.showTranslation}
               onPress={() => void session.setDisplay({ showTranslation: !s.display.showTranslation })}
             />
-            {s.lyrics?.kind === 'synced' ? (
+            {timedKind === 'synced' ? (
               <>
                 <Chip
                   theme={theme}
-                  label="−0.5초"
+                  label="가사 늦게"
                   on={false}
-                  onPress={() => void session.setOffset(s.offsetMs - 500)}
+                  onPress={() => void session.setOffset(s.offsetMs - OFFSET_STEP_MS)}
                 />
-                <Text style={{ color: theme.textDim, marginRight: 8 }}>{formatOffset(s.offsetMs)}</Text>
+                <Text
+                  style={{ color: theme.textDim, marginRight: 8 }}
+                  accessibilityLabel={`이 곡 싱크 보정 ${formatOffset(s.offsetMs)}`}
+                >
+                  {formatOffset(s.offsetMs)}
+                </Text>
                 <Chip
                   theme={theme}
-                  label="+0.5초"
+                  label="가사 빨리"
                   on={false}
-                  onPress={() => void session.setOffset(s.offsetMs + 500)}
+                  onPress={() => void session.setOffset(s.offsetMs + OFFSET_STEP_MS)}
                 />
               </>
             ) : null}
@@ -292,18 +352,73 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                   style={{ marginRight: 8 }}
                 />
               ) : null}
-              <Button theme={theme} label="가사 바꾸기" onPress={() => setPicking(true)} />
-            </View>
-            {s.lyrics && s.lyrics.kind !== 'instrumental' && s.translationStatus !== 'pending' ? (
-              <View style={[styles.rowWrap, { marginTop: 6 }]}>
+              {view?.mode === 'static' && canRecord ? (
                 <Button
                   theme={theme}
-                  label={s.translation?.origin === 'user' ? '내 번역 고치기' : '번역 직접 입력'}
-                  onPress={() => setEditing('translation')}
+                  kind="primary"
+                  label="싱크 직접 기록"
+                  onPress={() => setRecording(true)}
                   style={{ marginRight: 8 }}
                 />
-                {isJa ? <Button theme={theme} label="발음 고치기" onPress={() => setEditing('pronunciation')} /> : null}
+              ) : null}
+              <Button
+                theme={theme}
+                label={moreOpen ? '도구 닫기' : '도구 ▾'}
+                accessibilityLabel={
+                  moreOpen ? '도구 닫기' : '도구 열기: 가사 바꾸기, 번역 입력, 원문 내보내기, 싱크 기록'
+                }
+                onPress={() => setMoreOpen(!moreOpen)}
+              />
+            </View>
+            {moreOpen ? (
+              <View style={[styles.rowWrap, { marginTop: 2 }]}>
+                <Button theme={theme} label="가사 바꾸기" onPress={() => setPicking(true)} style={styles.tool} />
+                {s.lyrics && s.lyrics.kind !== 'instrumental' && s.translationStatus !== 'pending' ? (
+                  <Button
+                    theme={theme}
+                    label={s.translation?.origin === 'user' ? '내 번역 고치기' : '번역 직접 입력'}
+                    onPress={() => setEditing('translation')}
+                    style={styles.tool}
+                  />
+                ) : null}
+                {isJa && s.lyrics && s.translationStatus !== 'pending' ? (
+                  <Button
+                    theme={theme}
+                    label="발음 고치기"
+                    onPress={() => setEditing('pronunciation')}
+                    style={styles.tool}
+                  />
+                ) : null}
+                {s.lyrics && s.lyrics.kind !== 'instrumental' ? (
+                  <Button
+                    theme={theme}
+                    label="원문 txt 내보내기"
+                    onPress={() => void exportText()}
+                    style={styles.tool}
+                  />
+                ) : null}
+                {canRecord ? (
+                  <Button
+                    theme={theme}
+                    label={timing?.source === 'user' ? '싱크 다시 기록' : '싱크 직접 기록'}
+                    onPress={() => setRecording(true)}
+                    style={styles.tool}
+                  />
+                ) : null}
+                {s.timing ? (
+                  <Button
+                    theme={theme}
+                    label={s.lyrics?.kind === 'synced' ? '원래 싱크로 되돌리기' : '내 싱크 기록 끄기'}
+                    onPress={() => void session.clearUserTiming()}
+                    style={styles.tool}
+                  />
+                ) : null}
               </View>
+            ) : null}
+            {toolMsg ? (
+              <Note theme={theme} tone={toolMsg.danger ? 'danger' : 'dim'}>
+                {toolMsg.text}
+              </Note>
             ) : null}
           </View>
         ) : null}
@@ -322,21 +437,21 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                 label="−10초"
                 onPress={() => {
                   const pos = currentPos();
-                  if (pos != null) void control.seekTo(Math.max(0, pos - 10_000)).then(pb.refresh);
+                  if (pos != null) void control.seekTo(Math.max(0, pos - 10_000)).then(pb.resync);
                 }}
               />
               <Button
                 theme={theme}
                 kind="primary"
                 label={isPlaying ? '일시정지' : '재생'}
-                onPress={() => void (isPlaying ? control.pause() : control.play()).then(pb.refresh)}
+                onPress={() => void (isPlaying ? control.pause() : control.play()).then(pb.resync)}
               />
               <Button
                 theme={theme}
                 label="+10초"
                 onPress={() => {
                   const pos = currentPos();
-                  if (pos != null) void control.seekTo(pos + 10_000).then(pb.refresh);
+                  if (pos != null) void control.seekTo(pos + 10_000).then(pb.resync);
                 }}
               />
               <Button theme={theme} label="⏭" accessibilityLabel="다음 곡" onPress={() => void control.skipNext()} />
@@ -359,5 +474,6 @@ const styles = StyleSheet.create({
   card: { padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginVertical: 6 },
   footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopWidth: StyleSheet.hairlineWidth },
   rowWrap: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  tool: { marginRight: 8, marginTop: 6 },
   controls: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, gap: 6 },
 });

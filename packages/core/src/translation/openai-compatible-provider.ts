@@ -2,6 +2,7 @@ import { HttpError, type CancelSignal, type HttpClient } from '../ports.js';
 import type { ApiKeyManager } from '../security/api-keys.js';
 import type { Logger } from '../security/logger.js';
 import { redactText, type SecretRegistry } from '../security/redact.js';
+import type { ReasoningEffort } from './provider-config.js';
 import {
   ProviderError,
   type TranslationProvider,
@@ -28,6 +29,59 @@ export interface OpenAiCompatibleOptions {
   timeoutMs?: number;
   /** json_schema 구조화 출력을 지원하지 않는 호환 서버면 false(json_object로 대체) */
   structuredOutput?: boolean;
+  /** 추론 모델이면 추론 강도. 없으면 일반 모델 방식(max_tokens·temperature)으로 보낸다. */
+  reasoningEffort?: ReasoningEffort | null;
+}
+
+/**
+ * 추론 모델은 출력 토큰 한도(max_completion_tokens) 안에서 "생각" 토큰도 쓴다.
+ * 번역 결과가 잘리지 않도록 추론 강도별 여유분을 더한다(비용은 실제 사용한 토큰만 청구).
+ */
+export const REASONING_TOKEN_HEADROOM: Record<ReasoningEffort, number> = {
+  none: 0,
+  minimal: 2_000,
+  low: 4_000,
+  medium: 8_000,
+  high: 16_000,
+  xhigh: 32_000,
+  max: 64_000,
+};
+
+/** 추론 강도가 높을수록 응답이 오래 걸리므로 시간 초과를 늘린다(시간 초과는 "결과 미확인"이 되어 자동 재요청하지 않음). */
+export const REASONING_TIMEOUT_MS: Record<ReasoningEffort, number> = {
+  none: 60_000,
+  minimal: 60_000,
+  low: 90_000,
+  medium: 120_000,
+  high: 180_000,
+  xhigh: 300_000,
+  max: 420_000,
+};
+
+/** 요청 본문 구성(순수 함수, 테스트로 고정) */
+export function buildChatCompletionsBody(
+  req: Pick<TranslationProviderRequest, 'system' | 'user' | 'responseSchema' | 'maxOutputTokens'>,
+  opts: { model: string; structuredOutput?: boolean; reasoningEffort?: ReasoningEffort | null },
+): Record<string, unknown> {
+  const response_format =
+    opts.structuredOutput === false
+      ? { type: 'json_object' }
+      : { type: 'json_schema', json_schema: { name: 'lyrics_translation', strict: true, schema: req.responseSchema } };
+  const messages = [
+    { role: 'system', content: req.system },
+    { role: 'user', content: req.user },
+  ];
+  if (opts.reasoningEffort) {
+    // 추론 모델: max_tokens·temperature를 받지 않는다 → max_completion_tokens + reasoning_effort
+    return {
+      model: opts.model,
+      messages,
+      max_completion_tokens: req.maxOutputTokens + REASONING_TOKEN_HEADROOM[opts.reasoningEffort],
+      reasoning_effort: opts.reasoningEffort,
+      response_format,
+    };
+  }
+  return { model: opts.model, messages, max_tokens: req.maxOutputTokens, temperature: 0.3, response_format };
 }
 
 export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): TranslationProvider {
@@ -40,24 +94,15 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): T
     async translate(req: TranslationProviderRequest, signal?: CancelSignal): Promise<TranslationProviderResponse> {
       const key = await opts.keys.getForRequest(opts.providerId);
       if (!key) throw new ProviderError('auth', 'API 키가 등록되지 않았습니다', 'none');
-      const body = {
-        model: opts.model,
-        messages: [
-          { role: 'system', content: req.system },
-          { role: 'user', content: req.user },
-        ],
-        max_tokens: req.maxOutputTokens,
-        temperature: 0.3,
-        response_format:
-          opts.structuredOutput === false
-            ? { type: 'json_object' }
-            : {
-                type: 'json_schema',
-                json_schema: { name: 'lyrics_translation', strict: true, schema: req.responseSchema },
-              },
-      };
+      const body = buildChatCompletionsBody(req, opts);
       const url = `${base}/chat/completions`;
-      opts.logger.info('ai.request', { providerId: opts.providerId, model: opts.model, jobId: req.jobId, url });
+      opts.logger.info('ai.request', {
+        providerId: opts.providerId,
+        model: opts.model,
+        reasoningEffort: opts.reasoningEffort ?? null,
+        jobId: req.jobId,
+        url,
+      });
       let res;
       try {
         res = await opts.http.send({
@@ -65,7 +110,7 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): T
           method: 'POST',
           headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          timeoutMs: opts.timeoutMs ?? 60_000,
+          timeoutMs: opts.timeoutMs ?? (opts.reasoningEffort ? REASONING_TIMEOUT_MS[opts.reasoningEffort] : 60_000),
           ...(signal ? { signal } : {}),
         });
       } catch (e) {
@@ -98,8 +143,19 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): T
       } catch {
         return { rawText: '' };
       }
-      const choice = (parsed as { choices?: Array<{ message?: { content?: unknown; refusal?: unknown } }> })
-        .choices?.[0];
+      const choice = (
+        parsed as {
+          choices?: Array<{ finish_reason?: unknown; message?: { content?: unknown; refusal?: unknown } }>;
+        }
+      ).choices?.[0];
+      if (choice?.finish_reason === 'length') {
+        // 출력 한도에 걸려 잘린 응답(추론 토큰이 한도를 다 쓴 경우 포함). 이미 과금됨 → 자동 재요청 안 함.
+        throw new ProviderError(
+          'unknown',
+          '응답이 출력 한도에서 잘렸습니다(추론 강도를 낮추면 해결될 수 있음)',
+          'possible',
+        );
+      }
       const content = choice?.message?.content;
       const refusal = choice?.message?.refusal;
       const requestId = res.headers['x-request-id'];

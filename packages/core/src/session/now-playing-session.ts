@@ -1,5 +1,12 @@
 import type { Clock, IdGenerator, PlaybackSnapshot, ServiceTrackRef } from '../ports.js';
-import type { DisplaySettings, LyricsVersion, PronunciationVersion, Song, TranslationVersion } from '../model.js';
+import type {
+  DisplaySettings,
+  LyricsVersion,
+  PronunciationVersion,
+  Song,
+  TranslationVersion,
+  UserTimingVersion,
+} from '../model.js';
 import { buildLyricsVersion } from '../lyrics/lyrics-version.js';
 import {
   classifyLrclibRecord,
@@ -17,6 +24,7 @@ import type { TranslationOutcome, TranslationService } from '../translation/tran
 import { composeLyricsView, type LyricsScreenView } from '../display/compose.js';
 import { validateUserMapping } from '../import/user-translation-import.js';
 import { buildUserPronunciation } from '../import/user-pronunciation.js';
+import { buildTimingFromTaps, effectiveTiming, selectUserTiming, type EffectiveTiming } from '../sync/user-timing.js';
 
 /**
  * 현재 곡 세션: 재생 정보 → 곡 식별 → 가사(저장본 우선) → 번역 정책 → 화면 상태.
@@ -38,8 +46,13 @@ export interface SessionState {
   lyrics: LyricsVersion | null;
   translation: TranslationVersion | null;
   pronunciation: PronunciationVersion | null;
+  /** 사용자가 직접 기록한 싱크(있으면 원문 타임스탬프 대신 사용, D-28) */
+  timing: UserTimingVersion | null;
   display: DisplaySettings;
+  /** 곡별 싱크 보정(ms) */
   offsetMs: number;
+  /** 전체 싱크 보정(ms). 표시 기준 시각 = 재생 위치 + offsetMs + globalOffsetMs */
+  globalOffsetMs: number;
   translationStatus: TranslationStatus;
   lastOutcome: TranslationOutcome | null;
   notices: Array<LyricsNotice | 'offline' | 'rate-limited' | 'lyrics-error' | 'incompatible-version'>;
@@ -53,6 +66,11 @@ export interface SessionDeps {
   ids: IdGenerator;
   logger: Logger;
   sync?: SyncConfig;
+  /**
+   * 전체 싱크 보정 기본값(사용자가 바꾸기 전). 양수면 가사가 그만큼 먼저 넘어간다.
+   * 원문 타임스탬프 자체는 바꾸지 않는 표시용 보정이다(불변조건 5).
+   */
+  defaultGlobalOffsetMs?: number;
 }
 
 export class NowPlayingSession {
@@ -72,8 +90,10 @@ export class NowPlayingSession {
       lyrics: null,
       translation: null,
       pronunciation: null,
+      timing: null,
       display: { showTranslation: true, showPronunciation: true },
       offsetMs: 0,
+      globalOffsetMs: deps.defaultGlobalOffsetMs ?? 0,
       translationStatus: 'none',
       lastOutcome: null,
       notices: [],
@@ -84,7 +104,8 @@ export class NowPlayingSession {
   async start(): Promise<void> {
     await this.deps.translation.recoverInterruptedJobs();
     const display = await this.deps.store.getDisplaySettings();
-    this.update({ display });
+    const globalOffsetMs = (await this.deps.store.getGlobalSyncOffset()) ?? this.deps.defaultGlobalOffsetMs ?? 0;
+    this.update({ display, globalOffsetMs });
   }
 
   get current(): SessionState {
@@ -127,6 +148,7 @@ export class NowPlayingSession {
       lyrics: null,
       translation: null,
       pronunciation: null,
+      timing: null,
       offsetMs: 0,
       translationStatus: 'none',
       lastOutcome: null,
@@ -266,7 +288,10 @@ export class NowPlayingSession {
     const saved = await this.saveFetched(song, res);
     if (gen !== this.state.generation || !saved.lyrics) return { ok: false, error: '곡이 바뀌었습니다' };
     const lyrics = saved.lyrics;
-    this.update({ lyricsCandidates: [], translation: null, pronunciation: null, translationStatus: 'none' }, gen);
+    this.update(
+      { lyricsCandidates: [], translation: null, pronunciation: null, timing: null, translationStatus: 'none' },
+      gen,
+    );
     await this.refreshTexts(lyrics, gen, saved.notices);
     if (gen === this.state.generation && !this.state.translation && lyrics.kind !== 'instrumental') {
       void this.track(
@@ -280,12 +305,14 @@ export class NowPlayingSession {
     const { store } = this.deps;
     const translation = selectTranslation(await store.listTranslations(lyrics.id));
     const pronunciation = selectPronunciation(await store.listPronunciations(lyrics.id));
+    const timing = selectUserTiming(await store.listUserTimings(lyrics.id));
     this.update(
       {
         phase: 'ready',
         lyrics,
         translation,
         pronunciation,
+        timing,
         translationStatus: translation ? 'available' : this.state.translationStatus === 'pending' ? 'pending' : 'none',
         ...(notices ? { notices } : {}),
       },
@@ -404,22 +431,91 @@ export class NowPlayingSession {
     this.update({ offsetMs: await this.deps.store.getSyncOffset(song.id) });
   }
 
+  /**
+   * 사용자가 탭으로 기록한 싱크 저장(D-28). taps[i] = i번째 빈 행이 아닌 줄의 재생 위치(ms).
+   * 가사 판본·번역·발음은 그대로 두고 시간만 새 버전으로 추가한다. AI·네트워크 호출 없음.
+   * 기록한 시간은 실제 재생 위치이므로, 원래 타임스탬프를 맞추려고 넣었던 곡별 보정은 0으로 되돌린다.
+   */
+  async saveUserTiming(taps: readonly number[]): Promise<{ ok: boolean; error?: string }> {
+    const lv = this.state.lyrics;
+    const song = this.state.song;
+    if (!lv || !song) return { ok: false, error: '가사가 없습니다' };
+    const gen = this.state.generation;
+    const built = buildTimingFromTaps(lv, taps);
+    if (!built.ok) return { ok: false, error: built.error };
+    await this.deps.store.saveUserTiming({
+      id: this.deps.ids.next('tm'),
+      lyricsVersionId: lv.id,
+      kind: 'timed',
+      lines: built.lines,
+      sourceTextHash: lv.textHash,
+      createdAtEpochMs: this.deps.clock.nowEpochMs(),
+    });
+    await this.deps.store.setSyncOffset(song.id, 0);
+    this.update({ offsetMs: 0 }, gen);
+    await this.refreshTexts(lv, gen);
+    return { ok: true };
+  }
+
+  /** 내가 기록한 싱크를 쓰지 않고 원래 시간(또는 시간 없음)으로 되돌린다. 기록은 지우지 않고 '되돌리기' 버전을 추가. */
+  async clearUserTiming(): Promise<void> {
+    const lv = this.state.lyrics;
+    if (!lv || !this.state.timing) return;
+    const gen = this.state.generation;
+    await this.deps.store.saveUserTiming({
+      id: this.deps.ids.next('tm'),
+      lyricsVersionId: lv.id,
+      kind: 'cleared',
+      lines: {},
+      sourceTextHash: lv.textHash,
+      createdAtEpochMs: this.deps.clock.nowEpochMs(),
+    });
+    await this.refreshTexts(lv, gen);
+  }
+
+  /** 전체 싱크 보정 변경(모든 곡 공통). 네트워크·AI 호출 없음. */
+  async setGlobalOffset(offsetMs: number): Promise<void> {
+    await this.deps.store.setGlobalSyncOffset(offsetMs);
+    this.update({ globalOffsetMs: (await this.deps.store.getGlobalSyncOffset()) ?? 0 });
+  }
+
   // ------------------------------------------------------------ 화면
+
+  private timingCache: { lyrics: LyricsVersion; timing: UserTimingVersion | null; value: EffectiveTiming } | null =
+    null;
+
+  /** 싱크에 쓸 행 시각(사용자 기록 우선, 없으면 원문 타임스탬프). 가사가 없으면 null */
+  timingView(): EffectiveTiming | null {
+    const lv = this.state.lyrics;
+    if (!lv) return null;
+    const c = this.timingCache;
+    if (c && c.lyrics === lv && c.timing === this.state.timing) return c.value;
+    const value = effectiveTiming(lv, this.state.timing);
+    this.timingCache = { lyrics: lv, timing: this.state.timing, value };
+    return value;
+  }
+
+  /** i번째 행의 시작 시각(ms). 시간이 없거나 기록하지 않은 행이면 null(줄 탭 이동에 사용) */
+  lineStartMs(index: number): number | null {
+    const t = this.timingView()?.lines[index]?.startMs;
+    return t != null && Number.isFinite(t) ? t : null;
+  }
 
   syncFor(snapshot: PlaybackSnapshot | null): SyncResult {
     const lv = this.state.lyrics;
-    if (!lv) return { mode: 'unknown', reason: 'no-snapshot' };
+    const timing = this.timingView();
+    if (!lv || !timing) return { mode: 'unknown', reason: 'no-snapshot' };
     const cur = this.state.track;
     const matches =
       !snapshot?.track || !cur
         ? undefined
         : serviceKeyOf(snapshot.track) === serviceKeyOf(cur) && snapshot.track.service === cur.service;
     return computeSync({
-      kind: lv.kind,
-      lines: lv.lines,
+      kind: timing.kind,
+      lines: timing.lines,
       snapshot,
       nowMonotonicMs: this.deps.clock.monotonicMs(),
-      offsetMs: this.state.offsetMs,
+      offsetMs: this.state.offsetMs + this.state.globalOffsetMs,
       ...(matches !== undefined ? { trackMatches: matches } : {}),
       ...(this.deps.sync ? { config: this.deps.sync } : {}),
     });

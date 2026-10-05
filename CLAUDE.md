@@ -5,14 +5,14 @@
 
 ## 현재 상태
 Phase 0 완료: `packages/core`(플랫폼 독립 로직) + 검증 하네스.
-Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions 첫 iOS 빌드 성공(2026-10-04, IPA 생성 — 단 그때 워크플로는 xcodebuild 실패를 가릴 수 있어 수정함, 다음 빌드에서 재확인). 편집·백업 화면 추가(2026-10-05). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
+Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions 첫 iOS 빌드 성공(2026-10-04, IPA 생성 — 단 그때 워크플로는 xcodebuild 실패를 가릴 수 있어 수정함, 다음 빌드에서 재확인). 편집·백업 화면 추가(2026-10-05). 플레이리스트 탭(보관함 플레이리스트 바로 재생)·원문 TXT 내보내기·수동 싱크(탭 기록) 추가(2026-10-05, D-28~30). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
 1. 저장된 번역(사용자·AI)이 있으면 재생·재시작·표시 변경·모델/프롬프트/제공자 변경으로 AI를 호출하지 않는다.
 2. 표시 우선순위 고정: 사용자 번역 → 저장된 AI 번역 → 원문 → (조건 충족 시) 신규 AI 번역.
 3. 사용자 번역은 일부 행만 있어도 AI로 보완·수정·덮어쓰지 않는다. 늦게 온 AI 응답도 마찬가지.
 4. 발음 생성·재번역은 명시 요청으로만, 새 버전으로 저장한다.
-5. 싱크는 원문 타임스탬프만 기준. AI는 시간 정보를 만들거나 바꾸지 못한다. 위치를 모르면 진행을 꾸며내지 않는다. 단어 단위 싱크처럼 보이게 하지 않는다.
+5. 싱크는 원문 타임스탬프 또는 사용자가 직접 탭으로 기록한 시간만 기준(D-28). AI는 시간 정보를 만들거나 바꾸지 못한다. 위치를 모르면 진행을 꾸며내지 않는다. 단어 단위 싱크처럼 보이게 하지 않는다.
 6. 곡은 녹음 단위로 식별한다(라이브·리믹스·다른 버전 혼동 금지). 불확실하면 후보를 사용자에게 확인한다.
 7. 결과 미확인(타임아웃·앱 종료) 요청은 자동으로 다시 보내지 않는다. 저장은 원자적으로.
 8. API 키는 OS 보안 저장소에만. 소스·설정·로그·오류·테스트 데이터·내보내기·문서에 넣지 않는다. 키를 채팅에 붙여 넣으라고 요청하지 않는다.
@@ -30,7 +30,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 19개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 26개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

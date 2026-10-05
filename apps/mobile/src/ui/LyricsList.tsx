@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { LyricRowView, LyricsScreenView } from '@lyrics-companion/core';
 import type { Theme } from './theme';
@@ -9,8 +9,12 @@ import { Button } from './common';
  * 현재 행으로 자동 스크롤하되, 사용자가 직접 스크롤하면 추적을 멈추고 "현재 가사로" 버튼을 보인다(REQ-UI-05).
  * '동작 줄이기'가 켜져 있으면 애니메이션 없이 이동한다(REQ-UI-04). 글자 크기는 시스템 설정을 따른다.
  */
-export function LyricsList(props: { theme: Theme; view: LyricsScreenView; onPressLine?: (index: number) => void }) {
+function LyricsListImpl(props: { theme: Theme; view: LyricsScreenView; onPressLine?: (index: number) => void }) {
   const { theme, view } = props;
+  // 탭 처리 함수는 ref로 들고 있어, 부모가 다시 그려져도 행 렌더 함수가 바뀌지 않게 한다(불필요한 재렌더 방지).
+  const pressRef = useRef(props.onPressLine);
+  pressRef.current = props.onPressLine;
+  const canPress = !!props.onPressLine;
   const list = useRef<FlatList<LyricRowView>>(null);
   const [follow, setFollow] = useState(true);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -35,7 +39,7 @@ export function LyricsList(props: { theme: Theme; view: LyricsScreenView; onPres
       const color = active ? theme.text : past ? theme.textFaint : view.mode === 'synced' ? theme.textDim : theme.text;
       return (
         <Pressable
-          onPress={props.onPressLine ? () => props.onPressLine?.(index) : undefined}
+          onPress={canPress ? () => pressRef.current?.(index) : undefined}
           accessible
           accessibilityLabel={item.accessibilityLabel}
           accessibilityState={{ selected: active }}
@@ -51,7 +55,7 @@ export function LyricsList(props: { theme: Theme; view: LyricsScreenView; onPres
         </Pressable>
       );
     },
-    [theme, view.mode, props],
+    [theme, view.mode, canPress],
   );
 
   return (
@@ -76,6 +80,12 @@ export function LyricsList(props: { theme: Theme; view: LyricsScreenView; onPres
     </View>
   );
 }
+
+/** 같은 화면 구성(view)·테마면 다시 그리지 않는다 */
+export const LyricsList = memo(
+  LyricsListImpl,
+  (a, b) => a.view === b.view && a.theme === b.theme && !!a.onPressLine === !!b.onPressLine,
+);
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

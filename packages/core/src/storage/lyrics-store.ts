@@ -12,11 +12,13 @@ import type {
   TranslationJob,
   TranslationSettings,
   TranslationVersion,
+  UserTimingVersion,
 } from '../model.js';
 import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_TRANSLATION_SETTINGS } from '../model.js';
 import type { StreamingService } from '../ports.js';
 import { BACKUP_FORMAT, type ServiceTrackLink, type UserDataExport } from '../backup/backup-file.js';
 import { migrate } from './migrations.js';
+import { validateUserTiming } from '../sync/user-timing.js';
 import { inTransaction, SerialQueue, type SqlDriver, type SqlValue } from './sql-driver.js';
 import {
   parseProviderConfig,
@@ -50,6 +52,15 @@ export interface NewPronunciation {
   lines: Record<string, PronunciationLine>;
   sourceTextHash: string;
   provenance: Provenance | null;
+  createdAtEpochMs: number;
+}
+
+export interface NewUserTiming {
+  id: string;
+  lyricsVersionId: string;
+  kind: 'timed' | 'cleared';
+  lines: Record<string, number>;
+  sourceTextHash: string;
   createdAtEpochMs: number;
 }
 
@@ -106,6 +117,11 @@ const isPronMap = (x: unknown): x is Record<string, PronunciationLine> =>
       typeof (v as PronunciationLine).hangul === 'string' &&
       ((v as PronunciationLine).kana === null || typeof (v as PronunciationLine).kana === 'string'),
   );
+const isNumberMap = (x: unknown): x is Record<string, number> =>
+  typeof x === 'object' &&
+  x !== null &&
+  !Array.isArray(x) &&
+  Object.values(x).every((v) => typeof v === 'number' && Number.isFinite(v));
 const isFailure = (x: unknown): x is JobFailure =>
   typeof x === 'object' && x !== null && typeof (x as JobFailure).kind === 'string';
 
@@ -364,6 +380,56 @@ export class LyricsStore {
     return rows.map((r) => LyricsStore.toPronunciation(r));
   }
 
+  // ------------------------------------------------------------ 사용자 싱크 기록(수동 싱크)
+
+  private insertUserTiming(t: NewUserTiming): Promise<{ changes: number }> {
+    return this.db.run(
+      `INSERT INTO user_timings(id,lyrics_version_id,kind,lines_json,source_text_hash,created_at) VALUES (?,?,?,?,?,?)`,
+      [t.id, t.lyricsVersionId, t.kind, JSON.stringify(t.lines), t.sourceTextHash, t.createdAtEpochMs],
+    );
+  }
+
+  /**
+   * 사용자 싱크 기록 저장(새 버전 추가, 기존 버전 보존). 가사 판본은 바꾸지 않는다.
+   * 'timed'는 그 판본의 행 기준으로 다시 검증한다(가사에 없는 행·순서가 거꾸로인 시각 거부).
+   */
+  async saveUserTiming(t: NewUserTiming): Promise<void> {
+    await this.q.run(() =>
+      inTransaction(this.db, async () => {
+        const r = await this.db.get<Row>('SELECT * FROM lyrics_versions WHERE id = ?', [t.lyricsVersionId]);
+        if (!r) throw new Error('가사 판본이 없습니다');
+        if (t.kind === 'timed') {
+          const checked = validateUserTiming(LyricsStore.toLyrics(r), t.lines);
+          if (!checked.ok) throw new Error(checked.error);
+          await this.insertUserTiming({ ...t, lines: checked.lines });
+        } else {
+          await this.insertUserTiming({ ...t, lines: {} });
+        }
+      }),
+    );
+  }
+
+  private static toUserTiming(r: Row): UserTimingVersion {
+    const kind = str(r['kind']);
+    if (kind !== 'timed' && kind !== 'cleared') throw new Error('kind 형식 오류');
+    return {
+      id: str(r['id']),
+      lyricsVersionId: str(r['lyrics_version_id']),
+      kind,
+      lines: parseJson(r['lines_json'], isNumberMap),
+      sourceTextHash: str(r['source_text_hash']),
+      createdAtEpochMs: num(r['created_at']),
+      seq: num(r['seq']),
+    };
+  }
+
+  async listUserTimings(lyricsVersionId: string): Promise<UserTimingVersion[]> {
+    const rows = await this.q.run(() =>
+      this.db.all<Row>('SELECT * FROM user_timings WHERE lyrics_version_id = ? ORDER BY seq', [lyricsVersionId]),
+    );
+    return rows.map((r) => LyricsStore.toUserTiming(r));
+  }
+
   // ------------------------------------------------------------ 작업 상태
 
   async createJob(job: TranslationJob): Promise<void> {
@@ -548,6 +614,19 @@ export class LyricsStore {
     await this.setSettings([['provider.config', serializeProviderConfig(checked.config)]]);
   }
 
+  /** 전체(모든 곡 공통) 싱크 보정값. 사용자가 정한 적 없으면 null(앱 기본값 사용) */
+  async getGlobalSyncOffset(): Promise<number | null> {
+    const v = await this.getSetting('sync.global_offset_ms');
+    if (v === null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  async setGlobalSyncOffset(offsetMs: number): Promise<void> {
+    const clamped = Math.max(-5_000, Math.min(5_000, Math.round(offsetMs)));
+    await this.setSettings([['sync.global_offset_ms', String(clamped)]]);
+  }
+
   async getSyncOffset(songId: string): Promise<number> {
     const r = await this.q.run(() =>
       this.db.get<Row>('SELECT offset_ms FROM sync_offsets WHERE song_id = ?', [songId]),
@@ -590,12 +669,14 @@ export class LyricsStore {
     const lyricsVersions: LyricsVersion[] = [];
     const translations: TranslationVersion[] = [];
     const pronunciations: PronunciationVersion[] = [];
+    const userTimings: UserTimingVersion[] = [];
     const syncOffsets: Array<{ songId: string; offsetMs: number }> = [];
     for (const s of songs) {
       for (const lv of await this.listLyricsVersions(s.id)) {
         lyricsVersions.push(lv);
         translations.push(...(await this.listTranslations(lv.id)));
         pronunciations.push(...(await this.listPronunciations(lv.id)));
+        userTimings.push(...(await this.listUserTimings(lv.id)));
       }
       const off = await this.getSyncOffset(s.id);
       if (off !== 0) syncOffsets.push({ songId: s.id, offsetMs: off });
@@ -609,6 +690,7 @@ export class LyricsStore {
       lyricsVersions,
       translations,
       pronunciations,
+      userTimings,
       syncOffsets,
       settings: { display: await this.getDisplaySettings() },
     };
@@ -645,6 +727,7 @@ export class LyricsStore {
           lyricsAdded: 0,
           translationsAdded: 0,
           pronunciationsAdded: 0,
+          timingsAdded: 0,
           linksAdded: 0,
           linksRelinked: 0,
           linksKept: 0,
@@ -728,6 +811,17 @@ export class LyricsStore {
           await this.insertPronunciation(p);
           report.pronunciationsAdded++;
         }
+        // 사용자 싱크 기록(parseBackup이 판본 기준으로 이미 검증함)
+        for (const t of bySeq(data.userTimings)) {
+          if (!usableLyrics.has(t.lyricsVersionId)) continue;
+          const ex = await this.db.get<Row>('SELECT lyrics_version_id FROM user_timings WHERE id = ?', [t.id]);
+          if (ex) {
+            if (ex['lyrics_version_id'] !== t.lyricsVersionId) report.conflicts++;
+            continue;
+          }
+          await this.insertUserTiming(t);
+          report.timingsAdded++;
+        }
 
         for (const o of data.syncOffsets) {
           if (!newSongs.has(o.songId)) continue;
@@ -776,6 +870,8 @@ export interface ImportReport {
   lyricsAdded: number;
   translationsAdded: number;
   pronunciationsAdded: number;
+  /** 추가된 사용자 싱크 기록 버전 수 */
+  timingsAdded: number;
   linksAdded: number;
   /** 백업 쪽 곡이 더 가치 있는 번역을 가져 연결을 바꾼 수 */
   linksRelinked: number;

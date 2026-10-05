@@ -88,6 +88,25 @@ export interface PronunciationVersion {
   seq: number;
 }
 
+/**
+ * 사용자가 직접 기록한 행 시작 시각(수동 싱크, docs/plan.md D-28).
+ * - 사람이 노래를 들으며 탭해서 만든 시간만 저장한다. AI는 이 값을 만들거나 바꿀 수 없다(불변조건 5).
+ * - 가사 판본은 그대로 두고(번역·발음의 행 ID 연결 유지) 시간만 별도 버전으로 추가한다.
+ * - kind='cleared'는 "원래 시간으로 되돌리기"(추가 전용 저장이라 삭제 대신 표시를 남긴다).
+ */
+export interface UserTimingVersion {
+  id: string;
+  lyricsVersionId: string;
+  kind: 'timed' | 'cleared';
+  /** lineId → 시작 ms(빈 행 제외, 가사 순서대로 앞에서부터 연속). cleared면 빈 객체 */
+  lines: Record<string, number>;
+  /** 기록 당시 원문 textHash(이력용) */
+  sourceTextHash: string;
+  createdAtEpochMs: number;
+  /** 저장 순서. 가장 큰 seq가 현재 값 */
+  seq: number;
+}
+
 export interface DisplaySettings {
   showTranslation: boolean;
   showPronunciation: boolean;

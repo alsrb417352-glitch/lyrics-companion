@@ -95,6 +95,21 @@
       "manual": ["MV-PB-IOS-03"]
     },
     {
+      "id": "REQ-PB-06",
+      "title": "보관함 플레이리스트 불러오기 → 앱 안에서 재생·셔플·곡부터 재생(Music 앱을 열지 않음, 유료 개발자 계정 없이)",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/plan.md D-30, docs/architecture.md §13",
+      "implementation": [
+        "packages/core/src/playback/ios-library.ts",
+        "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
+        "apps/mobile/modules/now-playing/index.ts",
+        "apps/mobile/src/ui/PlaylistsScreen.tsx",
+        "apps/mobile/src/ui/Root.tsx"
+      ],
+      "manual": ["MV-PB-IOS-04"]
+    },
+    {
       "id": "REQ-LY-01",
       "title": "LRCLIB 조회: 식별 헤더, 순차·간격 요청, 429 Retry-After 준수, 응답 검증",
       "core": "verified",
@@ -140,11 +155,15 @@
     },
     {
       "id": "REQ-SY-01",
-      "title": "원문 타임스탬프 기준 행 단위 싱크, AI는 시간 정보를 만들거나 바꾸지 못함, 단어 싱크 흉내 금지",
+      "title": "원문 타임스탬프(또는 사용자가 직접 탭으로 기록한 시간) 기준 행 단위 싱크, AI는 시간 정보를 만들거나 바꾸지 못함, 단어 싱크 흉내 금지",
       "core": "verified",
       "app": "not-started",
       "design": "docs/architecture.md §8",
-      "implementation": ["packages/core/src/sync/sync-engine.ts", "packages/core/src/lyrics/lrc.ts"],
+      "implementation": [
+        "packages/core/src/sync/sync-engine.ts",
+        "packages/core/src/lyrics/lrc.ts",
+        "packages/core/src/sync/user-timing.ts"
+      ],
       "manual": []
     },
     {
@@ -156,7 +175,8 @@
       "implementation": [
         "packages/core/src/sync/sync-engine.ts",
         "packages/core/src/session/now-playing-session.ts",
-        "apps/mobile/src/ui/usePlayback.ts"
+        "apps/mobile/src/ui/usePlayback.ts",
+        "packages/core/src/sync/position-filter.ts"
       ],
       "manual": ["MV-PB-AND-02"]
     },
@@ -166,7 +186,11 @@
       "core": "verified",
       "app": "partial",
       "design": "docs/architecture.md §8",
-      "implementation": ["packages/core/src/storage/lyrics-store.ts"],
+      "implementation": [
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "apps/mobile/src/ui/SettingsScreen.tsx"
+      ],
       "manual": []
     },
     {
@@ -177,6 +201,23 @@
       "design": "docs/architecture.md §8",
       "implementation": ["packages/core/src/display/compose.ts"],
       "manual": []
+    },
+    {
+      "id": "REQ-SY-05",
+      "title": "수동 싱크: 자동 싱크가 안 될 때 노래를 들으며 줄마다 탭해 시간 기록·저장(가사·번역 유지, 되돌리기 가능, 기록하지 않은 줄은 강조 안 함)",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-28, docs/architecture.md §8",
+      "implementation": [
+        "packages/core/src/sync/user-timing.ts",
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/storage/migrations.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/backup/backup-file.ts",
+        "apps/mobile/src/ui/SyncRecordScreen.tsx",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx"
+      ],
+      "manual": ["MV-SY-01"]
     },
     {
       "id": "REQ-UI-01",
@@ -416,6 +457,19 @@
       "manual": ["MV-ED-01"]
     },
     {
+      "id": "REQ-ED-04",
+      "title": "원문 가사 TXT 내보내기(공유 시트: 파일에 저장·다른 앱으로 보내기), 바깥에서 번역한 결과를 붙여 넣으면 행이 맞음",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-29",
+      "implementation": [
+        "packages/core/src/lyrics/plain-text-export.ts",
+        "apps/mobile/src/adapters/text-export.ts",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx"
+      ],
+      "manual": ["MV-ED-02"]
+    },
+    {
       "id": "REQ-ST-01",
       "title": "원문·발음·번역·싱크 정보를 기기에 영구 저장, 같은 곡 재생 시 저장본 사용",
       "core": "verified",
@@ -625,6 +679,14 @@
     {
       "id": "AT-16",
       "title": "손상·변조된 백업 거부, 가져오기 실패 시 부분 반영 없음"
+    },
+    {
+      "id": "AT-17",
+      "title": "늦게 읽힌 위치 측정을 걸러 가사가 늦게 넘어가지 않음(앞서가지도 않음), 다음 행 전환 시각, 전체 보정"
+    },
+    {
+      "id": "AT-18",
+      "title": "수동 싱크(탭 기록): 시간 없는·틀린 가사에 기록 적용, 가사·번역 유지, 일부 기록 시 꾸며내지 않음, 되돌리기, 재실행·백업 유지, 잘못된 기록 거부"
     }
   ]
 }

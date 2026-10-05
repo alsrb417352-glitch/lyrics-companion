@@ -47,7 +47,8 @@
 ## §4 대체 흐름
 - `PlaybackSource.access()`가 `denied/unsupported`이면 앱은 수동 모드: 사용자가 고른 곡을 `ServiceTrackRef{service:'unknown', serviceTrackId:null}`로 세션에 전달.
 - 세션은 저장된 곡과 메타데이터가 맞으면 `needs-confirmation`(후보) 상태로 멈추고, 사용자가 `confirmCandidate`/`rejectCandidates`를 호출한다.
-- 위치 정보가 없으므로 `syncFor(null)` → `unknown` → 화면은 `position-unknown`(강조 없음). 수동 싱크(사용자가 현재 줄 탭)는 Phase 4에서 `ManualPlaybackSource`(앱 내부 시계 기반, "수동" 표시)로 구현한다.
+- 위치 정보가 없으므로 `syncFor(null)` → `unknown` → 화면은 `position-unknown`(강조 없음).
+- 자동 싱크가 안 되는 가사(시간 정보 없음·시간이 틀림)는 **수동 싱크 기록**(§8, D-28)으로 해결한다. 재생 위치는 계속 Music 앱에서 읽고, 줄 시작 시각만 사용자가 탭으로 기록한다(앱 내부 시계로 진행을 만드는 방식은 쓰지 않는다).
 
 ## §5 가사 조회 (LRCLIB)
 - `LrclibClient`: 식별 헤더(`User-Agent`, `Lrclib-Client`), 순차 큐 + 최소 간격(기본 300ms), 429/503 `Retry-After` 동안 네트워크 요청 없이 `rate_limited` 반환, Content-Type·크기·필드 검증, HTTPS만 허용.
@@ -63,7 +64,7 @@
 - 알 수 없는 괄호 내용은 제목 일부로 남겨 보수적으로 비교(잘못된 연결보다 새 곡 생성이 안전). 리마스터·feat.·explicit 표기는 같은 녹음으로 본다.
 
 ## §7 저장소와 데이터 모델
-SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v2). 앱에서는 **앱 문서 영역**(캐시 아님)에 DB 파일을 둔다.
+SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v3 — v3에서 `user_timings` 추가). 앱에서는 **앱 문서 영역**(캐시 아님)에 DB 파일을 둔다.
 
 | 테이블 | 내용 | 규칙 |
 |---|---|---|
@@ -73,6 +74,7 @@ SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v2). 앱에�
 | translations | 번역 버전(`origin` user/ai, 행 ID→번역, 생성 당시 `source_text_hash`, 제공자·모델·프롬프트 버전) | 추가만 함(덮어쓰기 없음). `seq`로 최신 판단 |
 | pronunciations | 발음 버전(행 ID→{kana, hangul}) | 위와 같음 |
 | sync_offsets | 곡별 보정값(ms) | ±30초로 제한 |
+| user_timings | 사용자가 탭으로 기록한 행 시작 시각(`kind` timed/cleared, 행 ID→ms) | 추가만 함. 가장 큰 `seq`가 현재 값, `cleared`면 원래 시간. 저장 시 판본 기준 검증 |
 | settings | 키-값 설정(`display.*`, `translate.auto`) | 비밀정보 저장 금지 |
 | jobs | 번역 작업 상태 | §12 상태 전이 |
 | usage_daily | UTC 일자별 요청 수·원문 글자 수 | 요청 전 원자적 예약 |
@@ -83,6 +85,7 @@ SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v2). 앱에�
 
 ## §8 싱크
 - 입력: 가사 판본(행 시작 ms), `PlaybackSnapshot{status, positionMs|null, capturedAtMonotonicMs, rate}`, 곡별 보정값.
+- **행 시작 시각의 출처**(`effectiveTiming`, `sync/user-timing.ts`): 사용자 싱크 기록이 있으면 그것, 없으면 원문 타임스탬프. 사용자 기록은 사람이 재생을 들으며 탭한 재생 위치만 담는다(AI가 만들 수 없음). 기록 대상은 빈 행이 아닌 행이고 앞에서부터 연속·시각 비감소. 빈 행은 다음 기록 행과 같은 시각(따로 강조 안 됨), 기록하지 않은 행은 `+∞`(절대 활성화되지 않음 — 진행을 꾸며내지 않음). 일반(plain) 가사도 기록이 있으면 synced로 계산한다. 기록 저장 시 곡별 보정은 0으로 되돌린다(기록이 실제 재생 위치이므로).
 - `estimatePositionMs`: playing이면 `position + (now − capturedAt) × rate`(곡 길이로 상한), paused/stopped/buffering이면 고정, 위치 없음·상태 unknown·측정 후 60초 초과(기본 `maxExtrapolationMs`)면 **unknown**.
 - 표시 기준 시각 = 위치 + 보정값(양수면 가사가 먼저 넘어감). 현재 행 = 시작 ≤ 기준 시각인 마지막 행(이진 탐색). 빈 행(간주)도 행으로 취급.
 - 스냅샷의 곡이 화면의 곡과 다르면 `track-mismatch`로 적용하지 않는다.
@@ -139,4 +142,8 @@ idle → resolving → (needs-confirmation → [confirm|reject]) → loading-lyr
 - Apple Music 전용(D-17). 가사 조회는 core `AppleMusicLyricsProvider`(D-18), 확정 못 한 후보는 `NowPlayingSession.lyricsCandidates` → 사용자가 `chooseLyricsRecord`로 선택. 줄 탭 → Music 앱 탐색(D-20).
 - 편집(2026-10-05): `EditScreen` — 번역 직접 입력·고치기(현재 보이는 번역으로 채워 시작, 붙여넣기 TXT·LRC는 core `previewTxtImport`/`previewLrcImport`가 정확히 맞을 때만 칸 채움), 발음(한글 독음) 고치기(core `buildUserPronunciation`: 바꾼 행만 kana=null). 저장은 `NowPlayingSession.saveUserTranslation`/`saveUserPronunciation`(새 버전 추가, AI 호출 없음).
 - 백업(2026-10-05): `adapters/backup-files.ts`(expo-file-system 쓰기·파일 선택 + expo-sharing 공유 시트) → core `parseBackup`(검증) → `LyricsStore.importUserData`(원자적 병합) → `NowPlayingSession.reloadCurrent()`. 공유 확장(share extension)·iCloud 권한은 쓰지 않는다(무료 서명, D-23).
+- 플레이리스트(2026-10-05, D-30): Swift `listPlaylists`·`playlistItems`(MPMediaQuery.playlists, persistentID는 10진 문자열) → core `mapLibraryPlaylists`/`mapLibraryTracks`(검증) → `PlaylistsScreen`. 재생은 `playPlaylist(id, 시작 곡, 셔플)` = `MPMusicPlayerMediaItemQueueDescriptor`(startItem) + `systemMusicPlayer.setQueue` → `prepareToPlay` → `play`. Music 앱이 백그라운드에서 재생하므로 앱 전환이 없다.
+- 원문 TXT 내보내기(D-29): core `lyricsToPlainText`·`plainTextFileName` → `adapters/text-export.ts`(캐시에 쓰고 공유 시트, 끝나면 삭제).
+- 수동 싱크(D-28): `SyncRecordScreen`(버튼 onPressIn 순간의 `estimatePositionMs`를 기록, 되돌리기 시 3초 앞으로 이동) → `NowPlayingSession.saveUserTiming`/`clearUserTiming`. 줄 탭 이동은 `session.lineStartMs(i)`(기록이 있으면 기록 시각).
+- 지금 재생 하단: 자주 쓰지 않는 기능(가사 바꾸기·번역 입력·발음 고치기·원문 txt·싱크 기록·되돌리기)은 "도구" 버튼 안에 모았다. 시간 정보 없는 가사면 "싱크 직접 기록"을 바로 보인다.
 - 남은 것: Android 모듈(Kotlin, Phase 6), TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제(Phase 4).

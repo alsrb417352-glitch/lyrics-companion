@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { PROVIDER_PRESETS, validateProviderConfig } from '@lyrics-companion/core';
-import type { AppServices } from '../services';
+import { PROVIDER_PRESETS, validateProviderConfig, type ReasoningEffort } from '@lyrics-companion/core';
+import { DEFAULT_LYRICS_LEAD_MS, type AppServices } from '../services';
+import { useSessionState } from './useSessionState';
 import { BackupSection } from './BackupSection';
 import { Button, Chip, Note } from './common';
 import type { Theme } from './theme';
+
+/** 화면에 보여 줄 추론 강도(ChatGPT 표기와 맞춤). null = 보내지 않음(일반 모델) */
+const EFFORT_CHOICES: Array<{ value: ReasoningEffort | null; label: string }> = [
+  { value: null, label: '보내지 않음' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
+];
 
 function utcDay(epochMs: number): string {
   return new Date(epochMs).toISOString().slice(0, 10);
@@ -21,11 +31,15 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
   const [baseUrl, setBaseUrl] = useState('');
   const [model, setModel] = useState('');
   const [structured, setStructured] = useState(true);
+  const [effort, setEffort] = useState<ReasoningEffort | null>(null);
   const [keyInput, setKeyInput] = useState('');
   const [keyHint, setKeyHint] = useState<string | null>(null);
   const [auto, setAuto] = useState(false);
   const [usage, setUsage] = useState<{ requests: number; sourceChars: number } | null>(null);
   const [msg, setMsg] = useState<{ text: string; danger?: boolean } | null>(null);
+  const sessionState = useSessionState(services.session);
+  const globalOffset = sessionState.globalOffsetMs;
+  const fmt = (ms: number) => `${ms > 0 ? '+' : ''}${(ms / 1000).toFixed(2)}초`;
 
   const reload = useCallback(async () => {
     const cfg = await store.getProviderConfig();
@@ -34,6 +48,7 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
       setBaseUrl(cfg.baseUrl);
       setModel(cfg.model);
       setStructured(cfg.structuredOutput);
+      setEffort(cfg.reasoningEffort);
       setKeyHint(await keys.hint(cfg.providerId));
     }
     setAuto((await store.getTranslationSettings()).autoTranslate);
@@ -45,7 +60,13 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
   }, [reload]);
 
   const saveConfig = async () => {
-    const r = validateProviderConfig({ providerId, baseUrl, model, structuredOutput: structured });
+    const r = validateProviderConfig({
+      providerId,
+      baseUrl,
+      model,
+      structuredOutput: structured,
+      reasoningEffort: effort,
+    });
     if (!r.ok) {
       setMsg({ text: r.error, danger: true });
       return;
@@ -56,7 +77,13 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
   };
 
   const saveKey = async () => {
-    const r = validateProviderConfig({ providerId, baseUrl, model, structuredOutput: structured });
+    const r = validateProviderConfig({
+      providerId,
+      baseUrl,
+      model,
+      structuredOutput: structured,
+      reasoningEffort: effort,
+    });
     if (!r.ok) {
       setMsg({ text: '먼저 제공자 설정을 올바르게 입력해 주세요.', danger: true });
       return;
@@ -94,7 +121,8 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
     >
       <Text style={[styles.h2, { color: theme.text }]}>AI 번역 제공자</Text>
       <Note theme={theme}>
-        OpenAI 호환 방식(Chat Completions)을 지원하는 제공자를 등록합니다. 모델 이름은 제공자 문서를 확인해 입력하세요.
+        OpenAI 호환 방식(Chat Completions)을 지원하는 제공자를 등록합니다. 모델 이름은 API용 이름을 그대로 넣습니다(예:
+        OpenAI GPT-6 Luna → gpt-6-luna). API 키는 ChatGPT 구독과 별도로 platform.openai.com에서 만듭니다.
       </Note>
       <View style={styles.rowWrap}>
         {PROVIDER_PRESETS.map((p) => (
@@ -133,6 +161,22 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
         <Text style={{ color: theme.text, flex: 1 }}>구조화 출력(json_schema) 사용</Text>
         <Switch value={structured} onValueChange={setStructured} />
       </View>
+      <Text style={[styles.label, { color: theme.textDim }]}>추론 강도(추론 모델만)</Text>
+      <View style={styles.rowWrap}>
+        {EFFORT_CHOICES.map((c) => (
+          <Chip
+            key={c.label}
+            theme={theme}
+            label={c.label}
+            on={effort === c.value}
+            onPress={() => setEffort(c.value)}
+          />
+        ))}
+      </View>
+      <Note theme={theme}>
+        GPT-6 Luna 같은 추론 모델은 강도를 골라야 합니다(ChatGPT의 &quot;Extra high&quot; = Extra high). 강도가 높을수록
+        느리고 토큰을 더 씁니다(Extra high는 곡당 수십 초~몇 분). 추론 모델이 아니면 &quot;보내지 않음&quot;.
+      </Note>
       <Button theme={theme} kind="primary" label="제공자 설정 저장" onPress={() => void saveConfig()} />
 
       <Text style={[styles.h2, { color: theme.text, marginTop: 24 }]}>API 키</Text>
@@ -171,6 +215,35 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
           오늘(UTC) 요청: {usage.requests}회 · 보낸 원문 {usage.sourceChars.toLocaleString()}자
         </Note>
       ) : null}
+
+      <Text style={[styles.h2, { color: theme.text, marginTop: 24 }]}>가사 싱크(모든 곡)</Text>
+      <Note theme={theme}>
+        가사가 노래보다 늦게 넘어가면 &quot;빨리&quot;, 먼저 넘어가면 &quot;늦게&quot;를 누르세요. 모든 곡에 적용되고,
+        곡마다 다른 차이는 지금 재생 화면의 &quot;가사 늦게/빨리&quot;로 따로 맞춥니다. 기본값{' '}
+        {fmt(DEFAULT_LYRICS_LEAD_MS)}.
+      </Note>
+      <View style={[styles.rowGap, { alignItems: 'center' }]}>
+        <Button
+          theme={theme}
+          label="늦게 0.05초"
+          onPress={() => void services.session.setGlobalOffset(globalOffset - 50)}
+        />
+        <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700', minWidth: 72, textAlign: 'center' }}>
+          {fmt(globalOffset)}
+        </Text>
+        <Button
+          theme={theme}
+          label="빨리 0.05초"
+          onPress={() => void services.session.setGlobalOffset(globalOffset + 50)}
+        />
+      </View>
+      <Button
+        theme={theme}
+        label="기본값으로"
+        onPress={() => void services.session.setGlobalOffset(DEFAULT_LYRICS_LEAD_MS)}
+        disabled={globalOffset === DEFAULT_LYRICS_LEAD_MS}
+        style={{ marginTop: 8, alignSelf: 'flex-start' }}
+      />
 
       <BackupSection services={services} theme={theme} />
 

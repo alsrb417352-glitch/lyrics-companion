@@ -36,11 +36,10 @@ export class IosMusicPlaybackSource implements PlaybackSource {
 
   async current(): Promise<PlaybackSnapshot | null> {
     if (!NowPlaying) return null;
-    // 측정 시각 = 호출 전후의 중간(네이티브 왕복 지연의 절반만큼 보정)
-    const before = this.clock.monotonicMs();
+    // 측정 시각 = 응답을 받은 시각. 실제로 읽은 순간은 그 이전이므로 위치를 앞당겨 추정하는 일이 없다.
+    // (중간값을 쓰면 메인 스레드가 바쁠 때 읽은 순간보다 이른 시각으로 기록되어, 필터가 그 값을 골라 가사가 앞서갈 수 있다 — D-25)
     const raw = await NowPlaying.current();
-    const after = this.clock.monotonicMs();
-    return mapIosSnapshot(raw, before + (after - before) / 2);
+    return mapIosSnapshot(raw, this.clock.monotonicMs());
   }
 
   subscribe(listener: (snapshot: PlaybackSnapshot) => void): () => void {

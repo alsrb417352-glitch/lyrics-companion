@@ -11,7 +11,16 @@ export interface ProviderConfig {
   model: string;
   /** json_schema 구조화 출력 지원 여부. 모르면 true로 두고 실패 시 끈다. */
   structuredOutput: boolean;
+  /**
+   * 추론 모델의 추론 강도(OpenAI `reasoning_effort`). null이면 보내지 않는다(일반 모델·호환 서버).
+   * 값을 정하면 추론 모델 방식으로 요청한다: `max_completion_tokens` 사용, `temperature` 생략.
+   * ChatGPT의 "Extra high" = `xhigh`.
+   */
+  reasoningEffort: ReasoningEffort | null;
 }
+
+export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 /**
  * 입력 편의를 위한 주소 예시. 모델 이름은 제공자가 자주 바꾸므로 사용자가 직접 입력한다.
@@ -46,7 +55,12 @@ export function validateProviderConfig(
   if (model.length === 0 || model.length > 128 || CONTROL.test(model))
     return { ok: false, error: '모델 이름이 올바르지 않습니다' };
   const structuredOutput = o['structuredOutput'] !== false;
-  return { ok: true, config: { providerId, baseUrl: rawUrl, model, structuredOutput } };
+  // 이전 버전 설정(필드 없음)은 null(보내지 않음)로 읽는다.
+  const re = o['reasoningEffort'];
+  if (re !== undefined && re !== null && !(REASONING_EFFORTS as readonly unknown[]).includes(re))
+    return { ok: false, error: '추론 강도 값이 올바르지 않습니다' };
+  const reasoningEffort = (re ?? null) as ReasoningEffort | null;
+  return { ok: true, config: { providerId, baseUrl: rawUrl, model, structuredOutput, reasoningEffort } };
 }
 
 export function serializeProviderConfig(c: ProviderConfig): string {
@@ -55,6 +69,7 @@ export function serializeProviderConfig(c: ProviderConfig): string {
     baseUrl: c.baseUrl,
     model: c.model,
     structuredOutput: c.structuredOutput,
+    reasoningEffort: c.reasoningEffort,
   });
 }
 

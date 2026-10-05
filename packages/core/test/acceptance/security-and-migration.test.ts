@@ -7,7 +7,13 @@ import { createHarness, fixture, tempDbPath, TRACKS, type Harness } from '../sup
 import { jsonResponse } from '../support/fakes.js';
 import { NodeSqliteDriver } from '../support/node-sqlite-driver.js';
 import { createOpenAiCompatibleProvider } from '../../src/translation/openai-compatible-provider.js';
-import { getSchemaVersion, migrate, MigrationError, MIGRATIONS } from '../../src/storage/migrations.js';
+import {
+  getSchemaVersion,
+  LATEST_SCHEMA_VERSION,
+  migrate,
+  MigrationError,
+  MIGRATIONS,
+} from '../../src/storage/migrations.js';
 import { LyricsStore } from '../../src/storage/lyrics-store.js';
 import { selectTranslation } from '../../src/translation/selection.js';
 import { buildLyricsVersion } from '../../src/lyrics/lyrics-version.js';
@@ -205,7 +211,9 @@ describe('AT-14 저장소 마이그레이션', () => {
     const { lvId } = await buildV1Database(path);
     const d = new NodeSqliteDriver(path);
     const store = await LyricsStore.open(d);
-    expect(await getSchemaVersion(d)).toBe(2);
+    expect(await getSchemaVersion(d)).toBe(LATEST_SCHEMA_VERSION);
+    // v3: 수동 싱크 기록 테이블이 비어 있는 채로 생기고 기존 데이터는 그대로
+    expect(await store.listUserTimings(lvId)).toEqual([]);
     const selected = selectTranslation(await store.listTranslations(lvId));
     expect(selected?.origin).toBe('user');
     expect(selected?.lines).toEqual({ l0001: '사용자 번역 1행' });
@@ -231,10 +239,14 @@ describe('AT-14 저장소 마이그레이션', () => {
     await migrate(d);
     const broken = [
       ...MIGRATIONS,
-      { version: 3, description: '실패 주입', statements: ['DELETE FROM translations', 'THIS IS NOT SQL'] },
+      {
+        version: LATEST_SCHEMA_VERSION + 1,
+        description: '실패 주입',
+        statements: ['DELETE FROM translations', 'THIS IS NOT SQL'],
+      },
     ];
     await expect(migrate(d, broken)).rejects.toBeInstanceOf(MigrationError);
-    expect(await getSchemaVersion(d)).toBe(2);
+    expect(await getSchemaVersion(d)).toBe(LATEST_SCHEMA_VERSION);
     const store = await LyricsStore.open(d);
     expect((await store.listTranslations(lvId)).length).toBe(2);
     await store.close();

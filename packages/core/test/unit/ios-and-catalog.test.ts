@@ -236,6 +236,7 @@ describe('AI 제공자 설정', () => {
         baseUrl: 'https://api.example.com/v1',
         model: 'some-model',
         structuredOutput: true,
+        reasoningEffort: null,
       },
     });
     expect(validateProviderConfig({ providerId: 'x', baseUrl: 'http://api.example.com', model: 'm' }).ok).toBe(false);
@@ -260,6 +261,7 @@ describe('AI 제공자 설정', () => {
       baseUrl: 'https://api.example.com/v1',
       model: 'm1',
       structuredOutput: false,
+      reasoningEffort: null,
       // 잘못 섞여 들어온 키 필드는 직렬화에서 제외되어야 한다
       ...strayField,
     });
@@ -269,13 +271,20 @@ describe('AI 제공자 설정', () => {
       baseUrl: 'https://api.example.com/v1',
       model: 'm1',
       structuredOutput: false,
+      reasoningEffort: null,
     });
     const rows = await h2.driver.all<{ value: string }>('SELECT value FROM settings');
     expect(JSON.stringify(rows)).not.toContain('SHOULD-NOT-BE-STORED');
     await h2.store.setProviderConfig(null);
     expect(await h2.store.getProviderConfig()).toBeNull();
     expect(
-      serializeProviderConfig({ providerId: 'a', baseUrl: 'https://a.example', model: 'm', structuredOutput: true }),
+      serializeProviderConfig({
+        providerId: 'a',
+        baseUrl: 'https://a.example',
+        model: 'm',
+        structuredOutput: true,
+        reasoningEffort: null,
+      }),
     ).not.toContain('key');
     await h2.close();
   });

@@ -8,8 +8,8 @@
 | **Phase 0** 기반 | 요구사항·연동 조사·지침·core 최소 구현·검증 하네스·CI 설정 | AT-01~14 자동 통과, 뮤테이션 12/12 검출, 문서 작성 | **완료(2026-10-04)** — 단, Windows 실기 실행·CI 실제 실행은 미확인(§4) |
 | **Phase 1** iOS 앱 골격 + Music 앱 연동 (2026-10-04 재배치, ADR-0002) | `apps/mobile` Expo 앱(Release 빌드), 어댑터(ExpoSqliteDriver·ExpoSecretStore·FetchHttpClient·SystemClock), Swift 모듈 `now-playing`(systemMusicPlayer 읽기·제어·`setQueue`), 곡 검색(iTunes Search·보관함), 가사 자동 조회(현지화 표기 대응·후보 확인, D-18), 자동 싱크(0.5초 재조회, D-19), 가사 화면, 설정(제공자·키·자동 번역 동의), GitHub Actions 무서명 IPA 빌드 | GitHub Actions에서 IPA 빌드 성공, Sideloadly로 iPhone 설치, MV-PB-IOS-01·02·03, MV-IOS-INSTALL-01 기록 | **진행 중** — GitHub Actions 첫 빌드 성공(2026-10-04, IPA 8.15MB; 당시 워크플로가 xcodebuild 실패를 가릴 수 있어 D-24로 수정, 다음 빌드에서 재확인). 사용자 PC에 Sideloadly·iTunes·iCloud(웹 버전)·GitHub Desktop 설치 확인(2026-10-05). **iPhone 설치·실기기 미확인** |
 | **Phase 2** 번역 실사용·동의 | 제공자 실제 호출(MV-AI-01), 실패·결과 미확인 UX 다듬기, Anthropic Messages 등 추가 어댑터 | MV-AI-01, MV-SEC-01 | 대기(AI 제공자 선택 필요) |
-| **Phase 3** 가사 화면 완성 | 자동 스크롤·접근성 다듬기, 수동 싱크 보정 저장 UX, 위치 정확도 보정 | MV-UI-01·02 | 대기 |
-| **Phase 4** 편집·판본 관리 | 사용자 번역 편집기, TXT/LRC 가져오기, 발음 수정, 원문 갱신, 내보내기/가져오기, 긴 가사 분할 번역 | REQ-ED-*, REQ-LY-04, REQ-ST-04, MV-ED-01, MV-ST-02 | **일부 앞당겨 진행(2026-10-05)** — AI 제공자 미정이라 Phase 2 대신 먼저: 번역 직접 입력·고치기, 붙여넣기(TXT·LRC), 발음 고치기, 백업 내보내기·가져오기(core 검증 AT-15·16, 뮤턴트 M16~M19). 남음: TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제, 긴 가사 분할 번역 |
+| **Phase 3** 가사 화면 완성 | 자동 스크롤·접근성 다듬기, 수동 싱크 보정 저장 UX, 위치 정확도 보정 | MV-UI-01·02, MV-SY-01 | **일부 앞당김(2026-10-05)**: 수동 싱크 탭 기록(D-28, core 검증 AT-18, 뮤턴트 M23~M26). 실기기 미확인 |
+| **Phase 4** 편집·판본 관리 | 사용자 번역 편집기, TXT/LRC 가져오기, 발음 수정, 원문 갱신, 내보내기/가져오기, 긴 가사 분할 번역 | REQ-ED-*, REQ-LY-04, REQ-ST-04, MV-ED-01, MV-ST-02 | **일부 앞당겨 진행(2026-10-05)** — AI 제공자 미정이라 Phase 2 대신 먼저: 번역 직접 입력·고치기, 붙여넣기(TXT·LRC), 발음 고치기, 백업 내보내기·가져오기(core 검증 AT-15·16, 뮤턴트 M16~M19). **2026-10-05 추가**: 원문 TXT 내보내기(D-29). 남음: TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제, 긴 가사 분할 번역 |
 | **Phase 5** 유료 계정 전환(선택) | Apple Developer Program 가입 시 EAS Build·TestFlight로 전환(7일 재서명 해소) | 설치 1년 유지 | 사용자 결정 대기 |
 | **Phase 6** Android(Apple Music 앱만) | Expo 모듈(Kotlin): NotificationListenerService + MediaSessionManager → PlaybackSource | MV-PB-AND-01·02, MV-PB-CTL-01 | 나중(사용자 결정 2026-10-04) |
 | **Phase 7** 배포 준비 | 약관·권리 검토, 오버레이 검토, 개인정보 처리방침, 스토어 정책 | MV-LEGAL-01, MV-OVL-01, 보안 체크리스트(docs/security.md §10) | 대기 |
@@ -45,6 +45,12 @@
 | D-22 | 번역 편집 화면은 **현재 보이는 번역(내 번역 또는 AI 번역)으로 칸을 채워 시작**, 저장하면 화면 내용 전체가 새 "내 번역" 버전 | 사용자 번역은 AI 번역보다 통째로 우선하므로(불변조건 2·3), 빈 칸으로 시작하면 한 줄만 고쳐도 나머지 줄 번역이 사라져 보인다. AI 결과를 사용자가 확인·채택하는 것은 명시 행동 | — |
 | D-23 | 파일 선택은 `expo-file-system`의 `File.pickFileAsync`, 내보내기는 `expo-sharing` 공유 시트("파일에 저장"). `expo-document-picker`·공유 확장(share extension)·App Group·iCloud 권한은 쓰지 않음(`expo install`이 넣은 `expo-sharing` 설정 플러그인도 제거) | 무료 Apple ID 서명은 App Group·iCloud 권한·추가 번들 ID(확장)에 제약이 있음(ADR-0002). 필요한 기능은 위 두 모듈로 충분 | 유료 계정 전환 시 재검토 |
 | D-24 | iOS 빌드 워크플로: xcodebuild 종료 코드를 그대로 실패로 처리(`\|\| true` 제거), `** BUILD SUCCEEDED **`·실행 파일·`main.jsbundle` 존재 검사 단계 추가, `upload-artifact@v6`(Node 24) | 이전 설정은 `grep ... \|\| true`가 파이프라인 전체 실패를 가려, 컴파일 실패 시에도 빈 `.app` 폴더로 IPA가 만들어질 수 있었음 | — |
+| D-25 | **싱크 지연 줄이기**: ① 위치 측정 필터(core `PositionFilter`) — 최근 3초 측정 중 "위치 − 측정 시각"이 가장 큰(가장 덜 늦은) 것을 기준으로 삼음, 앞으로 0.7초 이상 튀면 즉시·뒤로는 연속 2회일 때만 탐색으로 인정. ② 측정 시각은 응답 받은 시각(중간값 대신) → 필터가 앞서가는 값을 고르지 않음. ③ 재조회 0.5초 → 0.25초, 위치만 바뀐 측정으로는 화면을 다시 그리지 않음. ④ 250ms 고정 주기 대신 다음 행 시작 시각에 맞춘 타이머(`nextChangeInMs`). ⑤ 가사 목록 불필요한 재렌더 제거. ⑥ Swift에서 재생 위치를 마지막에 읽음 | 사용자 보고(2026-10-05): "가사 싱크가 너무 느리다". systemMusicPlayer 위치는 다른 프로세스 값이라 읽을 때마다 늦은 정도가 다르고, 이전 방식은 늦은 값을 그대로 쓰고 최대 250ms 화면 갱신 지연이 더해졌음. 필터는 받은 측정값 중 하나에 근거하므로 진행을 꾸며내지 않음(불변조건 5, AT-17) | 실기기 측정(MV-PB-IOS-01) 결과 |
+| D-26 | **전체 싱크 보정**(설정 › 가사 싱크, 모든 곡 공통, 0.05초 단위) 추가, 기본값 **+0.25초**(가사를 0.25초 먼저 넘김). 곡별 보정은 0.5초 → 0.1초 단위, 버튼 이름 "가사 늦게/빨리". 줄 탭 이동도 두 보정을 합쳐 계산 | LRC 시각은 노래 시작 순간이라 그때 바뀌면 읽기가 늦게 느껴짐(Apple Music 가사도 약간 먼저 넘어감). 원문 타임스탬프는 그대로 두는 표시용 보정 | 사용자가 설정에서 변경 |
+| D-27 | OpenAI 추론 모델 지원: 제공자 설정에 **추론 강도**(보내지 않음/Low/Medium/High/Extra high = `reasoning_effort`) 추가. 강도를 정하면 `max_completion_tokens`(번역 한도 + 강도별 추론 여유분) + `reasoning_effort`로 보내고 `temperature`는 생략. 시간 초과는 강도별 60초~7분. 출력 한도에서 잘린 응답(`finish_reason: length`)은 과금 가능 실패(자동 재요청 없음) | 사용자 선택(2026-10-05): ChatGPT "Luna Extra high" → API 모델 `gpt-6-luna` + `xhigh`(OpenAI 모델 문서 확인). 추론 모델은 `max_tokens`·`temperature`를 받지 않음. 실제 호출은 미확인(MV-AI-01) | 실제 호출 결과 |
+| D-28 | **수동 싱크 = 탭 기록**(2026-10-05 사용자 요청 "자동 싱크가 안 될 경우 수동 싱크"·방식 선택 "탭으로 싱크 기록"). 노래를 들으며 각 줄이 시작될 때 큰 버튼을 누르면 그 순간(onPressIn)의 Music 앱 재생 위치를 기록. 새 테이블 `user_timings`(스키마 v3, 추가 전용, `cleared`로 되돌리기)에 행 ID→ms로 저장하고 **가사 판본은 바꾸지 않음**. 싱크 계산은 `effectiveTiming`(기록 우선, 없으면 원문). 빈 행은 기록 대상 아님(다음 기록 행과 같은 시각), 일부만 기록하면 나머지 행은 +∞(강조 안 함). 저장 시 곡별 보정 0. 백업에 포함(`userTimings`, 이전 형식 허용, 판본 기준 검증). 불변조건 5를 "원문 타임스탬프 **또는 사용자가 직접 기록한 시간**"으로 확장(사용자 확인) | 새 가사 판본으로 저장하면 번역·발음이 이전 판본에 남아 사라져 보임(§7 규칙상 자동 연결 금지). 시간만 따로 두면 번역 연결이 유지되고 원래 시간으로 쉽게 되돌릴 수 있음. 사람이 들은 시간이라 AI 생성 금지 원칙과 충돌하지 않음. 반응 지연은 전체 싱크 보정(D-26)으로 보정 | 실기기 기록 정확도(MV-SY-01) |
+| D-29 | **원문 TXT 내보내기**(2026-10-05 사용자 요청, 방식 선택 "원문 txt 내보내기"): 한 줄 = 한 행, 연 구분 빈 줄 하나로, 시간·번역·발음 없음, 제목은 파일 이름에만(본문에 넣으면 붙여넣기 행 수가 어긋남). 공유 시트로 내보냄(D-23과 같은 방식) | 바깥(ChatGPT 등)에서 번역 → "번역 직접 입력"에 붙여 넣으면 `previewTxtImport` 규칙(빈 행 제외 행 수 일치)으로 그대로 맞춰짐 | — |
+| D-30 | **플레이리스트 탭**(2026-10-05 사용자 요청 "애플 뮤직 플레이리스트 가져오기", "앱에서 플레이리스트 재생 버튼 → 바로 듣기"): MediaPlayer `MPMediaQuery.playlists()`로 **보관함** 플레이리스트만(직접 만든 것 + 보관함에 추가한 Apple Music 플레이리스트). 재생은 `MPMusicPlayerMediaItemQueueDescriptor`(startItem) + `systemMusicPlayer.setQueue`/`prepareToPlay`/`play`, 셔플은 `shuffleMode`. 탭 순서: 지금 재생·플레이리스트·검색·설정 | MusicKit `MusicLibraryRequest`·카탈로그 API는 개발자 토큰(App ID의 MusicKit 서비스)이 필요해 무료 서명에서 못 씀(ADR-0002, D-13). systemMusicPlayer는 Music 앱이 백그라운드 재생하므로 앱 전환이 없음. 한계: 보관함에 추가하지 않은 플레이리스트는 안 보임, 셔플 설정은 Music 앱 설정을 바꿈 | 유료 계정 전환 시 MusicKit으로 확대 검토 |
 | D-15 | 앱(`apps/mobile`)은 루트 npm 워크스페이스에 넣지 않고 별도 패키지로 둔다(core는 `file:` 의존성 + Metro 설정으로 연결) | 루트 `npm ci`·`npm run check`가 React Native 설치 없이 Windows에서 가볍게 돌도록 | 워크스페이스 통합이 필요해지면 재검토 |
 | D-16 | (D-17로 폐기, 수동 모드 코드 제거) iOS에서 Spotify·YouTube Music은 수동 모드: LRCLIB 검색 → 들리는 줄 탭 → 앱 시계로 진행, 화면에 "수동 싱크" 표시 | 공개 API 없음(platform-support §2.5), 진행을 꾸며내지 않는다는 불변조건 5 | — |
 
@@ -61,6 +67,12 @@
 - Sideloadly 무료 서명 설치·7일 재서명 후 데이터·Keychain 유지 여부: 미확인(MV-IOS-INSTALL-01).
 - iTunes Search의 jp·us 스토어 ID로 한국 계정에서 `setQueue` 재생 가능 여부: 미확인(MV-PB-IOS-03).
 
+**2026-10-05 추가 기능(플레이리스트·원문 TXT·수동 싱크)**
+- 확인한 것(클라우드 Linux): core 테스트·뮤테이션 26/26, 앱 타입 검사, iOS JS 번들(Metro), `expo prebuild --platform ios`.
+- **Swift 추가 코드(`listPlaylists`·`playlistItems`·`playPlaylist`)는 컴파일 미확인** — Mac이 없어 GitHub Actions 다음 빌드에서 확인해야 함.
+- 보관함에 추가한 Apple Music 플레이리스트의 다운로드하지 않은 곡이 `MPMediaQuery`·`setQueue`로 재생되는지, 셔플·시작 곡 지정 동작: 실기기 미확인(MV-PB-IOS-04).
+- 탭 기록 정확도(사람 반응 지연)와 전체 보정으로 맞출 수 있는지: 미확인(MV-SY-01). 원문 TXT 공유 시트·파일 인코딩: 미확인(MV-ED-02).
+
 **연동(실기기 0건)**
 - 세 서비스 Android 앱이 MediaSession에 제공하는 실제 필드(MEDIA_ID 형식, 위치 갱신 빈도), 사이드로드 시 알림 접근 제한 여부.
 - iOS `currentPlaybackTime` 정확도·탐색 반영 지연, 권한 문구 요구사항, MusicKit 사용 조건(유료 개발자 계정 범위).
@@ -75,6 +87,6 @@
 ## 5. 사용자에게 확인이 필요한 사항
 0. 사용자 PC 준비(2026-10-05 확인): Sideloadly, iTunes·iCloud(Apple 웹사이트 버전), GitHub Desktop 설치됨. GitHub 공개 저장소 `alsrb417352-glitch/lyrics-companion`. 다음: iPhone 설치(docs/ios-install.md §2-3~§4).
 1. ~~주 사용 기기~~ → **답변(2026-10-04)**: iPhone, Mac 없음, 유료 개발자 계정은 우선 무료로 시도, Android는 나중.
-2. 사용할 AI 제공자(첫 실제 어댑터 우선순위). 현재 앱은 OpenAI 호환 방식만 지원. **2026-10-05 답변: 아직 미정** → 편집·백업(Phase 4 일부)을 먼저 진행.
+2. 사용할 AI 제공자 → **답변(2026-10-05): OpenAI `gpt-6-luna`, 추론 강도 Extra high(xhigh)**. 앱 설정에서 직접 등록(D-27). API 키는 ChatGPT 구독과 별도(platform.openai.com).
 3. 배포 의도(개인 사용 vs 공개 배포) — 권리 검토 범위가 달라진다.
 4. GitHub 저장소 공개/비공개 — 비공개면 macOS 빌드 사용량·과금 확인 필요(docs/ios-install.md §1).

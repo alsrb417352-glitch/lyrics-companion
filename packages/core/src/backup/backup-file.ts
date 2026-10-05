@@ -7,10 +7,12 @@ import type {
   Provenance,
   Song,
   TranslationVersion,
+  UserTimingVersion,
 } from '../model.js';
 import type { StreamingService } from '../ports.js';
 import { computeContentHash, computeTextHash } from '../lyrics/lyrics-version.js';
 import { sanitizeLine } from '../util/text.js';
+import { validateUserTiming } from '../sync/user-timing.js';
 
 /**
  * 백업 파일(내보내기 JSON) 형식과 가져오기 전 검증.
@@ -55,6 +57,8 @@ export interface UserDataExport {
   lyricsVersions: LyricsVersion[];
   translations: TranslationVersion[];
   pronunciations: PronunciationVersion[];
+  /** 사용자 싱크 기록(수동 싱크). 이전 형식 백업에는 없다(빈 배열로 읽음). */
+  userTimings: UserTimingVersion[];
   syncOffsets: Array<{ songId: string; offsetMs: number }>;
   settings: { display: DisplaySettings };
 }
@@ -66,6 +70,7 @@ export interface BackupSummary {
   aiTranslations: number;
   userPronunciations: number;
   aiPronunciations: number;
+  userTimings: number;
   exportedAtEpochMs: number;
 }
 
@@ -236,6 +241,33 @@ function parsePronunciation(x: unknown, i: number, lyrics: Map<string, LyricsVer
   return { ...base, lines };
 }
 
+function parseUserTiming(x: unknown, i: number, lyrics: Map<string, LyricsVersion>): UserTimingVersion {
+  const w = `userTimings[${i}]`;
+  const o = obj(x, w);
+  const lyricsVersionId = id(o['lyricsVersionId'], `${w}.lyricsVersionId`);
+  const lv = lyrics.get(lyricsVersionId) ?? fail(`${w}: 연결된 가사 판본이 파일에 없습니다`);
+  const kind = oneOf(o['kind'], ['timed', 'cleared'] as const, `${w}.kind`);
+  const raw = obj(o['lines'], `${w}.lines`);
+  let lines: Record<string, number> = {};
+  if (kind === 'timed') {
+    // 사람이 기록한 시간인지 알 수는 없지만, 판본의 행·순서·범위에 맞는지는 확인한다(불변조건 5·9).
+    const checked = validateUserTiming(lv, raw);
+    if (!checked.ok) fail(`${w}: ${checked.error}`);
+    lines = checked.lines;
+  } else if (Object.keys(raw).length > 0) {
+    fail(`${w}: 되돌리기 기록에 시각이 있습니다`);
+  }
+  return {
+    id: id(o['id'], `${w}.id`),
+    lyricsVersionId,
+    kind,
+    lines,
+    sourceTextHash: text(o['sourceTextHash'], `${w}.sourceTextHash`, 128),
+    createdAtEpochMs: int(o['createdAtEpochMs'], `${w}.createdAtEpochMs`, 0, MAX_EPOCH),
+    seq: int(o['seq'], `${w}.seq`, 0, Number.MAX_SAFE_INTEGER),
+  };
+}
+
 /**
  * 백업 파일 텍스트를 검증해 가져오기 가능한 데이터로 만든다.
  * @param maxSchemaVersion 이 앱이 아는 최신 DB 스키마 버전(더 새로운 앱에서 만든 백업은 거부)
@@ -289,6 +321,21 @@ export function parseBackup(raw: string, maxSchemaVersion: number): BackupParseR
       }
     }
 
+    // 이전 형식(userTimings 없음)도 받아들인다.
+    const userTimings =
+      root['userTimings'] === undefined
+        ? []
+        : arr(root['userTimings'], 'userTimings', BACKUP_LIMITS.maxTranslations).map((x, i) =>
+            parseUserTiming(x, i, lyrics),
+          );
+    {
+      const ids = new Set<string>();
+      for (const t of userTimings) {
+        if (ids.has(t.id)) fail('싱크 기록 ID 중복');
+        ids.add(t.id);
+      }
+    }
+
     // 이전 형식(serviceTracks 없음)도 받아들인다.
     const serviceTracks: ServiceTrackLink[] =
       root['serviceTracks'] === undefined
@@ -332,6 +379,7 @@ export function parseBackup(raw: string, maxSchemaVersion: number): BackupParseR
       lyricsVersions: lyricsList,
       translations,
       pronunciations,
+      userTimings,
       syncOffsets,
       settings: { display },
     };
@@ -345,6 +393,7 @@ export function parseBackup(raw: string, maxSchemaVersion: number): BackupParseR
         aiTranslations: translations.filter((t) => t.origin === 'ai').length,
         userPronunciations: pronunciations.filter((p) => p.origin === 'user').length,
         aiPronunciations: pronunciations.filter((p) => p.origin === 'ai').length,
+        userTimings: userTimings.filter((t) => t.kind === 'timed').length,
         exportedAtEpochMs,
       },
     };

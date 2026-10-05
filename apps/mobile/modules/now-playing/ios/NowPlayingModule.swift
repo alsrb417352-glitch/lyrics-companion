@@ -119,6 +119,72 @@ public final class NowPlayingModule: Module {
       promise.resolve(true)
     }.runOnQueue(.main)
 
+    // 보관함 플레이리스트 목록(직접 만든 것 + 보관함에 추가한 Apple Music 플레이리스트).
+    // MPMediaQuery만 쓰므로 MusicKit 개발자 토큰·App ID 서비스가 필요 없다(무료 서명 가능, ADR-0002).
+    // persistentID(UInt64)는 JS 숫자 정밀도를 넘을 수 있어 10진수 문자열로 넘긴다. 해석은 core ios-library.ts.
+    AsyncFunction("listPlaylists") { () -> [[String: Any]] in
+      if MPMediaLibrary.authorizationStatus() != .authorized { return [] }
+      let lists = (MPMediaQuery.playlists().collections ?? []).prefix(1000)
+      return lists.compactMap { c -> [String: Any]? in
+        guard let pl = c as? MPMediaPlaylist else { return nil }
+        let attrs = pl.playlistAttributes
+        return [
+          "persistentId": String(pl.persistentID),
+          "name": pl.name ?? "",
+          "count": pl.count,
+          "smart": attrs.contains(.smart) || attrs.contains(.genius),
+        ]
+      }
+    }
+
+    // 플레이리스트의 곡 목록(재생 순서), 최대 5000곡
+    AsyncFunction("playlistItems") { (playlistId: String) -> [[String: Any]] in
+      if MPMediaLibrary.authorizationStatus() != .authorized { return [] }
+      guard let pl = Self.findPlaylist(playlistId) else { return [] }
+      return pl.items.prefix(5000).map { item in
+        var row: [String: Any] = [
+          "persistentId": String(item.persistentID),
+          "title": item.title ?? "",
+          "artist": item.artist ?? "",
+          "durationSec": item.playbackDuration,
+          "storeId": item.playbackStoreID,
+        ]
+        if let album = item.albumTitle { row["album"] = album }
+        return row
+      }
+    }
+
+    // 플레이리스트 전체를 Music 앱 재생 대기열로 넣고 재생한다(우리 앱에서 바로 듣기 — Music 앱을 열 필요 없음).
+    // startItemId가 있으면 그 곡부터, shuffle이면 섞어서. 다음/이전 곡은 플레이리스트 순서를 따른다.
+    AsyncFunction("playPlaylist") { (playlistId: String, startItemId: String?, shuffle: Bool, promise: Promise) in
+      guard let pl = Self.findPlaylist(playlistId) else {
+        promise.reject("E_NOT_FOUND", "플레이리스트를 찾지 못했습니다")
+        return
+      }
+      let items = pl.items
+      if items.isEmpty {
+        promise.reject("E_EMPTY", "플레이리스트에 곡이 없습니다")
+        return
+      }
+      let p = self.player
+      let desc = MPMusicPlayerMediaItemQueueDescriptor(itemCollection: MPMediaItemCollection(items: items))
+      if let sid = startItemId, let pid = UInt64(sid), let start = items.first(where: { $0.persistentID == pid }) {
+        desc.startItem = start
+      }
+      p.shuffleMode = shuffle ? .songs : .off
+      p.setQueue(with: desc)
+      p.prepareToPlay { error in
+        DispatchQueue.main.async {
+          if let error = error {
+            promise.reject("E_PREPARE", error.localizedDescription)
+            return
+          }
+          p.play()
+          promise.resolve(true)
+        }
+      }
+    }.runOnQueue(.main)
+
     OnStartObserving("onChange") {
       DispatchQueue.main.async { self.startObserving() }
     }
@@ -174,11 +240,22 @@ public final class NowPlayingModule: Module {
     if let album = item.albumTitle { out["album"] = album }
     out["durationSec"] = item.playbackDuration
     out["storeId"] = item.playbackStoreID
-    let t = p.currentPlaybackTime
-    if t.isFinite { out["positionSec"] = t }
     let r = Double(p.currentPlaybackRate)
     if r.isFinite { out["rate"] = r }
+    // 재생 위치는 마지막에 읽는다: JS는 응답을 받은 시각을 측정 시각으로 쓰므로,
+    // 읽은 순간과 응답 사이를 가능한 짧게 한다(가사 지연 최소화, docs/plan.md D-25).
+    let t = p.currentPlaybackTime
+    if t.isFinite { out["positionSec"] = t }
     return out
+  }
+
+  private static func findPlaylist(_ playlistId: String) -> MPMediaPlaylist? {
+    guard let pid = UInt64(playlistId) else { return nil }
+    let q = MPMediaQuery.playlists()
+    q.addFilterPredicate(
+      MPMediaPropertyPredicate(value: NSNumber(value: pid), forProperty: MPMediaPlaylistPropertyPersistentID)
+    )
+    return q.collections?.first as? MPMediaPlaylist
   }
 
   private static func authString(_ s: MPMediaLibraryAuthorizationStatus) -> String {

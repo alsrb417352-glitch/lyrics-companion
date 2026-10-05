@@ -113,6 +113,22 @@ export const MIGRATIONS: readonly Migration[] = [
       `DELETE FROM settings WHERE key = 'display'`,
     ],
   },
+  {
+    version: 3,
+    description: '사용자 싱크 기록(수동 싱크) 테이블 추가 — 가사 판본은 그대로 두고 행 시각만 버전으로 추가',
+    statements: [
+      `CREATE TABLE user_timings (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL UNIQUE,
+        lyrics_version_id TEXT NOT NULL REFERENCES lyrics_versions(id),
+        kind TEXT NOT NULL CHECK (kind IN ('timed','cleared')),
+        lines_json TEXT NOT NULL,
+        source_text_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX idx_user_timings_lv ON user_timings(lyrics_version_id)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
