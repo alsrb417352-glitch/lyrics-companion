@@ -1,3 +1,5 @@
+import type { ServiceTrackRef } from '../ports.js';
+
 /**
  * iOS 보관함 플레이리스트 원시 값 → 앱 모델 변환(순수 함수, docs/plan.md D-30).
  * 네이티브 모듈(Swift, MPMediaQuery.playlists())은 값을 가공하지 않고 넘기고, 검증·정리는 여기서 테스트로 고정한다.
@@ -86,6 +88,23 @@ export function mapLibraryTracks(raw: unknown): LibraryTrack[] {
     });
   }
   return out;
+}
+
+/**
+ * 보관함 곡 → 재생 곡 정보(ServiceTrackRef). 지금 재생(mapIosTrack)과 같은 MPMediaItem 값으로 만들므로
+ * 같은 곡이면 serviceKey가 같다(스토어 ID가 있으면 ID, 없으면 같은 메타데이터 지문).
+ * 그래서 플레이리스트에서 미리 받은 가사를 나중에 재생할 때 그대로 찾는다(REQ-LY-05).
+ */
+export function libraryTrackToRef(t: LibraryTrack): ServiceTrackRef {
+  return {
+    service: 'apple-music',
+    serviceTrackId: t.storeId,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    durationMs: t.durationMs,
+    isrc: null,
+  };
 }
 
 /** 플레이리스트 이름 검색(대소문자·공백 무시, 부분 일치) */

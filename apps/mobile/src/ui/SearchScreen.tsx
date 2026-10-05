@@ -3,7 +3,8 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import type { CatalogTrack } from '@lyrics-companion/core';
 import { NowPlaying, type LibraryItemRaw } from '../../modules/now-playing';
 import type { AppServices } from '../services';
-import { Button, Chip, Note } from './common';
+import { ArtworkTile, Chip, Note } from './common';
+import { Icon } from './icons';
 import type { Theme } from './theme';
 import type { PlaybackApi } from './usePlayback';
 
@@ -13,6 +14,8 @@ interface Row {
   key: string;
   title: string;
   sub: string;
+  /** 아트 타일 색을 정하는 값(앨범·가수) */
+  seed: string;
   onPress: () => Promise<void>;
 }
 
@@ -52,6 +55,7 @@ export function SearchScreen(props: {
       key: `c-${t.storeId}`,
       title: t.title,
       sub: `${t.artist}${t.album ? ` · ${t.album}` : ''}${mmss(t.durationMs)}`,
+      seed: `${t.album ?? t.title}|${t.artist}`,
       onPress: async () => {
         if (!NowPlaying) return;
         try {
@@ -70,6 +74,7 @@ export function SearchScreen(props: {
       key: `l-${it.persistentId}`,
       title: it.title,
       sub: `${it.artist}${it.album ? ` · ${it.album}` : ''}${mmss(it.durationSec * 1000)}`,
+      seed: `${it.album ?? it.title}|${it.artist}`,
       onPress: async () => {
         if (!NowPlaying) return;
         try {
@@ -118,7 +123,8 @@ export function SearchScreen(props: {
             ? '고른 곡을 Music 앱이 재생하고, 가사는 자동으로 맞춰집니다.'
             : '기기 보관함에 있는 곡을 제목으로 찾습니다.'}
         </Note>
-        <View style={styles.searchRow}>
+        <View style={[styles.searchBox, { backgroundColor: theme.surface }]}>
+          <Icon name="search" size={18} color={theme.textFaint} />
           <TextInput
             value={term}
             onChangeText={setTerm}
@@ -127,15 +133,11 @@ export function SearchScreen(props: {
             placeholderTextColor={theme.textFaint}
             returnKeyType="search"
             autoCorrect={false}
-            style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
+            clearButtonMode="while-editing"
+            editable={!busy}
+            style={[styles.input, { color: theme.text }]}
           />
-          <Button
-            theme={theme}
-            kind="primary"
-            label={busy ? '…' : '검색'}
-            onPress={() => void search()}
-            disabled={busy}
-          />
+          {busy ? <Text style={{ color: theme.textFaint }}>…</Text> : null}
         </View>
         {message ? <Note theme={theme}>{message}</Note> : null}
       </View>
@@ -145,15 +147,20 @@ export function SearchScreen(props: {
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`${item.title}, ${item.sub}. 재생`}
             onPress={() => void item.onPress()}
-            style={({ pressed }) => [styles.item, { borderColor: theme.border, opacity: pressed ? 0.6 : 1 }]}
+            style={({ pressed }) => [styles.item, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }} numberOfLines={1}>
-              {item.title}
-            </Text>
-            <Text style={{ color: theme.textDim, fontSize: 14 }} numberOfLines={1}>
-              {item.sub}
-            </Text>
+            <ArtworkTile seed={item.seed} size={48} />
+            <View style={styles.itemText}>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={{ color: theme.textDim, fontSize: 13 }} numberOfLines={1}>
+                {item.sub}
+              </Text>
+            </View>
+            <Icon name="play" size={20} color={theme.accent} />
           </Pressable>
         )}
       />
@@ -165,14 +172,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   pad: { padding: 16 },
   rowWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  input: {
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
-    fontSize: 16,
+    marginTop: 6,
   },
-  item: { paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  input: { flex: 1, height: 42, fontSize: 16 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 8 },
+  itemText: { flex: 1, minWidth: 0 },
 });

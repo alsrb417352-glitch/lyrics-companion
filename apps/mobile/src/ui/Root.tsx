@@ -7,16 +7,17 @@ import { NowPlayingScreen } from './NowPlayingScreen';
 import { PlaylistsScreen } from './PlaylistsScreen';
 import { SearchScreen } from './SearchScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { Icon, type IconName } from './icons';
 import { useTheme, type Theme } from './theme';
 import { usePlayback } from './usePlayback';
 
 type Tab = 'now' | 'playlists' | 'search' | 'settings';
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'now', label: '지금 재생' },
-  { id: 'playlists', label: '플레이리스트' },
-  { id: 'search', label: '검색' },
-  { id: 'settings', label: '설정' },
+const TABS: Array<{ id: Tab; label: string; icon: IconName }> = [
+  { id: 'now', label: '지금 재생', icon: 'note' },
+  { id: 'playlists', label: '플레이리스트', icon: 'playlist' },
+  { id: 'search', label: '검색', icon: 'search' },
+  { id: 'settings', label: '설정', icon: 'settings' },
 ];
 
 function Main(props: { services: AppServices; theme: Theme }) {
@@ -49,10 +50,16 @@ function Main(props: { services: AppServices; theme: Theme }) {
             onPress={() => setTab(t.id)}
             style={styles.tab}
           >
+            <Icon name={t.icon} size={24} color={tab === t.id ? theme.accent : theme.textDim} />
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
-              style={{ color: tab === t.id ? theme.accent : theme.textDim, fontSize: 14, fontWeight: '700' }}
+              style={{
+                color: tab === t.id ? theme.accent : theme.textDim,
+                fontSize: 11,
+                fontWeight: '600',
+                marginTop: 2,
+              }}
             >
               {t.label}
             </Text>
@@ -101,8 +108,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
     paddingHorizontal: 4,
-    minHeight: 48,
+    minHeight: 52,
   },
 });

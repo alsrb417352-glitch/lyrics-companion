@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import type { SessionState, SkipReason, TranslationOutcome } from '@lyrics-companion/core';
 import type { AppServices } from '../services';
 import { exportLyricsText } from '../adapters/text-export';
-import { Button, Chip, Note } from './common';
+import { ArtworkTile, Button, Chip, IconButton, Note } from './common';
+import { Icon, type IconName } from './icons';
+import { PlaybackBar } from './PlaybackBar';
 import { EditScreen, type EditMode } from './EditScreen';
 import { LyricsList } from './LyricsList';
 import { LyricsPicker } from './LyricsPicker';
@@ -40,6 +42,27 @@ function outcomeText(o: TranslationOutcome | null): string | null {
   }
   if (o.kind === 'created' && o.partialFailure) return `일부만 완료: ${o.partialFailure.message}`;
   return null;
+}
+
+/** 도구 메뉴의 아이콘 타일 */
+function ToolTile(props: { theme: Theme; icon: IconName; label: string; onPress: () => void }) {
+  const { theme } = props;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        styles.toolTile,
+        { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      <Icon name={props.icon} size={22} color={theme.text} />
+      <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', textAlign: 'center' }} numberOfLines={2}>
+        {props.label}
+      </Text>
+    </Pressable>
+  );
 }
 
 function formatOffset(ms: number): string {
@@ -189,26 +212,46 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
 
   return (
     <View style={[styles.flex, { backgroundColor: theme.bg }]}>
-      {/* 헤더 */}
-      <View style={[styles.header, { borderColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-          {s.track?.title ?? 'Music 앱에서 곡을 재생하세요'}
-        </Text>
-        {s.track ? (
-          <Text style={{ color: theme.textDim, fontSize: 15 }} numberOfLines={1}>
-            {s.track.artist}
-            {s.track.album ? ` · ${s.track.album}` : ''}
+      {/* 헤더: 아트 타일 + 곡 정보 + 도구 메뉴 */}
+      <View style={styles.header}>
+        <ArtworkTile seed={s.track ? `${s.track.album ?? s.track.title}|${s.track.artist}` : 'idle'} size={56} />
+        <View style={styles.headerText}>
+          <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
+            {s.track?.title ?? 'Music 앱에서 곡을 재생하세요'}
           </Text>
+          {s.track ? (
+            <Text style={{ color: theme.textDim, fontSize: 15 }} numberOfLines={1}>
+              {s.track.artist}
+              {s.track.album ? ` · ${s.track.album}` : ''}
+            </Text>
+          ) : null}
+          {s.phase === 'ready' && view ? (
+            <View style={styles.pillRow}>
+              <View style={[styles.pill, { backgroundColor: theme.surface }]}>
+                <Text style={{ color: theme.textDim, fontSize: 11, fontWeight: '600' }} numberOfLines={1}>
+                  {view.mode === 'position-unknown'
+                    ? '재생 위치 모름'
+                    : view.mode === 'static'
+                      ? '시간 정보 없는 가사'
+                      : timing?.source === 'user'
+                        ? '내가 기록한 싱크'
+                        : '자동 싱크'}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+        {s.phase === 'ready' ? (
+          <IconButton
+            theme={theme}
+            icon={moreOpen ? 'close' : 'more'}
+            label={moreOpen ? '도구 닫기' : '도구 열기: 가사 바꾸기, 번역 입력, 원문 내보내기, 싱크 기록'}
+            kind="soft"
+            size={40}
+            iconSize={20}
+            onPress={() => setMoreOpen(!moreOpen)}
+          />
         ) : null}
-        <Text style={{ color: theme.textFaint, fontSize: 12, marginTop: 4 }}>
-          {view?.mode === 'position-unknown'
-            ? 'Music 앱 연동 · 재생 위치를 알 수 없어 진행을 표시하지 않습니다'
-            : view?.mode === 'static'
-              ? '이 가사에는 시간 정보가 없습니다 · "싱크 직접 기록"으로 맞출 수 있습니다'
-              : timing?.source === 'user'
-                ? 'Music 앱 연동 · 내가 기록한 싱크'
-                : 'Music 앱 연동 · 자동 싱크'}
-        </Text>
       </View>
 
       {/* 본문 */}
@@ -298,26 +341,30 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
               onPress={() => void session.setDisplay({ showTranslation: !s.display.showTranslation })}
             />
             {timedKind === 'synced' ? (
-              <>
-                <Chip
+              <View style={[styles.offset, { backgroundColor: theme.surface }]}>
+                <IconButton
                   theme={theme}
-                  label="가사 늦게"
-                  on={false}
+                  icon="minus"
+                  label="가사 늦게(0.1초)"
+                  size={30}
+                  iconSize={16}
                   onPress={() => void session.setOffset(s.offsetMs - OFFSET_STEP_MS)}
                 />
                 <Text
-                  style={{ color: theme.textDim, marginRight: 8 }}
+                  style={{ color: theme.textDim, fontSize: 13, minWidth: 64, textAlign: 'center' }}
                   accessibilityLabel={`이 곡 싱크 보정 ${formatOffset(s.offsetMs)}`}
                 >
-                  {formatOffset(s.offsetMs)}
+                  싱크 {formatOffset(s.offsetMs)}
                 </Text>
-                <Chip
+                <IconButton
                   theme={theme}
-                  label="가사 빨리"
-                  on={false}
+                  icon="plus"
+                  label="가사 빨리(0.1초)"
+                  size={30}
+                  iconSize={16}
                   onPress={() => void session.setOffset(s.offsetMs + OFFSET_STEP_MS)}
                 />
-              </>
+              </View>
             ) : null}
           </View>
         ) : null}
@@ -337,6 +384,7 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
               {!s.translation && s.translationStatus !== 'pending' && s.lyrics?.kind !== 'instrumental' ? (
                 <Button
                   theme={theme}
+                  icon="cloud"
                   label={unknownPending ? '확인했어요 — 다시 요청' : '이 곡 번역 요청'}
                   onPress={() =>
                     void session.requestTranslation(unknownPending ? { acknowledgeUnknownOutcome: true } : {})
@@ -356,61 +404,44 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                 <Button
                   theme={theme}
                   kind="primary"
+                  icon="tap"
                   label="싱크 직접 기록"
                   onPress={() => setRecording(true)}
                   style={{ marginRight: 8 }}
                 />
               ) : null}
-              <Button
-                theme={theme}
-                label={moreOpen ? '도구 닫기' : '도구 ▾'}
-                accessibilityLabel={
-                  moreOpen ? '도구 닫기' : '도구 열기: 가사 바꾸기, 번역 입력, 원문 내보내기, 싱크 기록'
-                }
-                onPress={() => setMoreOpen(!moreOpen)}
-              />
             </View>
             {moreOpen ? (
-              <View style={[styles.rowWrap, { marginTop: 2 }]}>
-                <Button theme={theme} label="가사 바꾸기" onPress={() => setPicking(true)} style={styles.tool} />
+              <View style={styles.toolGrid}>
+                <ToolTile theme={theme} icon="swap" label="가사 바꾸기" onPress={() => setPicking(true)} />
                 {s.lyrics && s.lyrics.kind !== 'instrumental' && s.translationStatus !== 'pending' ? (
-                  <Button
+                  <ToolTile
                     theme={theme}
+                    icon="edit"
                     label={s.translation?.origin === 'user' ? '내 번역 고치기' : '번역 직접 입력'}
                     onPress={() => setEditing('translation')}
-                    style={styles.tool}
                   />
                 ) : null}
                 {isJa && s.lyrics && s.translationStatus !== 'pending' ? (
-                  <Button
-                    theme={theme}
-                    label="발음 고치기"
-                    onPress={() => setEditing('pronunciation')}
-                    style={styles.tool}
-                  />
+                  <ToolTile theme={theme} icon="edit" label="발음 고치기" onPress={() => setEditing('pronunciation')} />
                 ) : null}
                 {s.lyrics && s.lyrics.kind !== 'instrumental' ? (
-                  <Button
-                    theme={theme}
-                    label="원문 txt 내보내기"
-                    onPress={() => void exportText()}
-                    style={styles.tool}
-                  />
+                  <ToolTile theme={theme} icon="share" label="원문 txt 내보내기" onPress={() => void exportText()} />
                 ) : null}
                 {canRecord ? (
-                  <Button
+                  <ToolTile
                     theme={theme}
+                    icon="tap"
                     label={timing?.source === 'user' ? '싱크 다시 기록' : '싱크 직접 기록'}
                     onPress={() => setRecording(true)}
-                    style={styles.tool}
                   />
                 ) : null}
                 {s.timing ? (
-                  <Button
+                  <ToolTile
                     theme={theme}
-                    label={s.lyrics?.kind === 'synced' ? '원래 싱크로 되돌리기' : '내 싱크 기록 끄기'}
+                    icon="undo"
+                    label={s.lyrics?.kind === 'synced' ? '원래 싱크로' : '내 싱크 끄기'}
                     onPress={() => void session.clearUserTiming()}
-                    style={styles.tool}
                   />
                 ) : null}
               </View>
@@ -423,41 +454,18 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           </View>
         ) : null}
 
-        <View style={[styles.controls]}>
-          {control ? (
-            <>
-              <Button
-                theme={theme}
-                label="⏮"
-                accessibilityLabel="이전 곡"
-                onPress={() => void control.skipPrevious()}
-              />
-              <Button
-                theme={theme}
-                label="−10초"
-                onPress={() => {
-                  const pos = currentPos();
-                  if (pos != null) void control.seekTo(Math.max(0, pos - 10_000)).then(pb.resync);
-                }}
-              />
-              <Button
-                theme={theme}
-                kind="primary"
-                label={isPlaying ? '일시정지' : '재생'}
-                onPress={() => void (isPlaying ? control.pause() : control.play()).then(pb.resync)}
-              />
-              <Button
-                theme={theme}
-                label="+10초"
-                onPress={() => {
-                  const pos = currentPos();
-                  if (pos != null) void control.seekTo(pos + 10_000).then(pb.resync);
-                }}
-              />
-              <Button theme={theme} label="⏭" accessibilityLabel="다음 곡" onPress={() => void control.skipNext()} />
-            </>
-          ) : null}
-        </View>
+        {control ? (
+          <View style={{ marginTop: 6 }}>
+            <PlaybackBar
+              theme={theme}
+              control={control}
+              isPlaying={isPlaying}
+              durationMs={pb.snapshot?.track?.durationMs ?? s.track?.durationMs ?? null}
+              position={currentPos}
+              resync={pb.resync}
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -467,13 +475,33 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24 },
   pad: { padding: 20 },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  title: { fontSize: 20, fontWeight: '700' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  headerText: { flex: 1, minWidth: 0 },
+  pillRow: { flexDirection: 'row', marginTop: 4 },
+  pill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  title: { fontSize: 19, fontWeight: '800' },
   h1: { fontSize: 24, fontWeight: '800', marginBottom: 8 },
   h2: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
   card: { padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginVertical: 6 },
-  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6, borderTopWidth: StyleSheet.hairlineWidth },
   rowWrap: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
-  tool: { marginRight: 8, marginTop: 6 },
-  controls: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, gap: 6 },
+  offset: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 4, marginLeft: 'auto' },
+  toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  toolTile: {
+    width: '31%',
+    minHeight: 72,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 8,
+  },
 });

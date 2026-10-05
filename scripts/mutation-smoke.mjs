@@ -220,6 +220,30 @@ const MUTANTS = [
     find: 'if (!checked.ok) fail(`${w}: ${checked.error}`);\n    lines = checked.lines;',
     replace: 'lines = raw as Record<string, number>;',
   },
+  {
+    id: 'M27',
+    req: 'REQ-LY-05',
+    desc: '일괄 받기가 이미 가사가 저장된 곡도 다시 조회·덮어씀',
+    file: S('batch/playlist-lyrics-batch.ts'),
+    find: "let song = resolved.song;\n    if (song.activeLyricsVersionId) return { kind: 'result', status: 'already-saved', songId: song.id };",
+    replace: 'let song = resolved.song;',
+  },
+  {
+    id: 'M28',
+    req: 'REQ-LY-03',
+    desc: '일괄 받기가 같은 녹음인지 불확실한 곡을 확인 없이 새 곡으로 만들어 조회',
+    file: S('batch/playlist-lyrics-batch.ts'),
+    find: "if (decision.kind === 'candidates') return { kind: 'needs-confirmation' };",
+    replace: '// mutated',
+  },
+  {
+    id: 'M29',
+    req: 'REQ-LY-05',
+    desc: '일괄 받기가 오프라인에서도 멈추지 않고 곡마다 오류로 계속 진행',
+    file: S('batch/playlist-lyrics-batch.ts'),
+    find: "if (res.kind === 'offline') return { kind: 'stop', reason: 'offline' };",
+    replace: '// mutated',
+  },
 ];
 
 const vitest = binPath('vitest');

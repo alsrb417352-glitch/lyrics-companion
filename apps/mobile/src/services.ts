@@ -7,11 +7,13 @@ import {
   Logger,
   LyricsStore,
   NowPlayingSession,
+  PlaylistLyricsBatch,
   SecretRegistry,
   TranslationService,
   type TranslationProvider,
   type TranslationProviderRegistry,
 } from '@lyrics-companion/core';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { FetchHttpClient } from './adapters/http';
 import { IosMusicPlaybackSource } from './adapters/ios-playback-source';
 import { ExpoSecretStore } from './adapters/secure-store';
@@ -40,6 +42,8 @@ export interface AppServices {
   lrclib: LrclibClient;
   catalog: ItunesCatalogClient;
   playback: IosMusicPlaybackSource | null;
+  /** 플레이리스트 가사 원문 일괄 받기(D-31). 화면을 옮겨도 계속되도록 앱 전체에서 하나만 둔다. */
+  playlistBatch: PlaylistLyricsBatch;
   logs: RingLogSink;
 }
 
@@ -93,9 +97,10 @@ export async function createAppServices(): Promise<AppServices> {
   const lrclib = new LrclibClient({ http, clock, clientId: LRCLIB_CLIENT_ID });
   const catalog = new ItunesCatalogClient({ http, clock });
   // 한국 Apple Music의 현지화 표기(예: 요네즈 켄시)로 못 찾으면 스토어 ID로 원어 표기를 얻어 다시 찾는다.
+  const lyrics = new AppleMusicLyricsProvider({ lrclib, catalog });
   const session = new NowPlayingSession({
     store,
-    lyrics: new AppleMusicLyricsProvider({ lrclib, catalog }),
+    lyrics,
     translation,
     clock,
     ids,
@@ -104,5 +109,15 @@ export async function createAppServices(): Promise<AppServices> {
   });
   await session.start();
   const playback = IosMusicPlaybackSource.available() ? new IosMusicPlaybackSource(clock) : null;
-  return { clock, store, keys, translation, session, lrclib, catalog, playback, logs };
+  // 같은 LRCLIB 클라이언트를 써서 요청 간격·Retry-After를 지금 재생 조회와 함께 지킨다. AI는 쓰지 않는다.
+  const playlistBatch = new PlaylistLyricsBatch({ store, lyrics, clock, ids, logger });
+  // 받는 동안 화면이 꺼지면 iOS가 앱을 멈추므로 화면 꺼짐을 막는다(끝나면 해제).
+  let awake = false;
+  playlistBatch.subscribe((s) => {
+    if (s.running === awake) return;
+    awake = s.running;
+    if (awake) void activateKeepAwakeAsync('playlist-batch').catch(() => undefined);
+    else void deactivateKeepAwake('playlist-batch').catch(() => undefined);
+  });
+  return { clock, store, keys, translation, session, lrclib, catalog, playback, playlistBatch, logs };
 }
