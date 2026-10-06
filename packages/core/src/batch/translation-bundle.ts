@@ -1,11 +1,13 @@
 import type { Clock, IdGenerator, ServiceTrackRef } from '../ports.js';
 import type { LyricsVersion, Song } from '../model.js';
 import { translatableLines } from '../lyrics/lyrics-version.js';
+import { buildUserPronunciation } from '../import/user-pronunciation.js';
+import { selectPronunciation } from '../translation/selection.js';
 import { serviceKeyOf } from '../matching/track-identity.js';
 import { previewTxtImport, validateUserMapping } from '../import/user-translation-import.js';
 import type { Logger } from '../security/logger.js';
 import type { LyricsStore } from '../storage/lyrics-store.js';
-import { sanitizeLine, sanitizeMultiline } from '../util/text.js';
+import { hasJapaneseScript, sanitizeLine, sanitizeMultiline } from '../util/text.js';
 
 /**
  * 플레이리스트 번역 묶음 파일(REQ-ED-05, docs/plan.md D-34).
@@ -25,6 +27,11 @@ import { sanitizeLine, sanitizeMultiline } from '../util/text.js';
  * - 저장은 곡마다 새 "내 번역" 버전 추가(원자적). 기존 AI 번역보다 먼저 보이고(불변조건 2), 이전 버전은 남는다.
  * - 행 수가 다르거나 원문을 그대로 둔 곡은 저장하지 않는다(자동으로 끼워 맞추지 않음, REQ-ED-02).
  * - 현재 활성 판본이 아닌 판본을 가리키면(내보낸 뒤 가사를 바꿈) 저장하지 않는다 — 저장해도 화면에 안 보이므로.
+ *
+ * [발음] 칸(D-35): 일본어 곡은 한글 발음(독음)도 같은 파일로 넣을 수 있다. 번역과 따로 판단·저장한다.
+ * - 줄 맞추기는 번역과 같다(빈 행 제외 줄 수가 원문과 같을 때만, 한 줄 = 한 줄).
+ * - 저장은 기존 "발음 고치기"와 같은 규칙(buildUserPronunciation): 일본어 글자가 있는 행만 저장한다.
+ * - 이미 "내 발음"이 있는 곡은 건너뛴다(번역과 같은 정책). AI로 발음을 만들거나 채우지 않는다(불변조건 4).
  */
 
 export const BUNDLE_HEADER = '# 가사 보조 · 번역 묶음 v1';
@@ -32,6 +39,7 @@ export const BUNDLE_LIMITS = { maxChars: 4 * 1024 * 1024, maxSongs: 1000 } as co
 
 const ORIGINAL_MARK = '[원문]';
 const TRANSLATION_MARK = '[번역]';
+const PRONUNCIATION_MARK = '[발음]';
 /** 머리글 끝의 판본 ID 표시. 예: `### 3. 제목 — 가수  {lv:lv_123}` */
 const HEADER_ID = /\{lv:([A-Za-z0-9_-]{1,100})\}\s*$/;
 const FENCE = /^\s*```/;
@@ -78,13 +86,19 @@ export function formatTranslationBundle(label: string, entries: readonly BundleE
     `# 플레이리스트: ${headerText(label) || '이름 없음'} (${entries.length}곡)`,
     '# 쓰는 법: 각 곡의 [번역] 아래에 원문과 같은 줄 수로 한국어 번역을 적으세요(한 줄 = 한 줄, 빈 줄은 무시).',
     '# "###" 머리글 줄과 [원문]·[번역] 표시는 지우거나 고치지 마세요. 번역을 비워 둔 곡은 가져올 때 건너뜁니다.',
+    '# 일본어 곡의 [발음] 칸은 선택입니다: 원문과 같은 줄 수로 한글 발음을 적으면 "내 발음"으로 저장됩니다.',
     '',
   ];
   entries.forEach((e, i) => {
     const name = [headerText(e.title), headerText(e.artist)].filter(Boolean).join(' — ') || '제목 없음';
     out.push(`### ${i + 1}. ${name}  {lv:${e.lyrics.id}}`);
+    const lines = translatableLines(e.lyrics);
+    if (lines.some((l) => hasJapaneseScript(l.text))) {
+      out.push(PRONUNCIATION_MARK);
+      out.push('');
+    }
     out.push(ORIGINAL_MARK);
-    for (const l of translatableLines(e.lyrics)) out.push(sanitizeLine(l.text));
+    for (const l of lines) out.push(sanitizeLine(l.text));
     out.push(TRANSLATION_MARK);
     out.push('');
     out.push('');
@@ -150,6 +164,8 @@ export interface BundleSection {
   translation: string[];
   /** [번역] 표시가 있었는지 */
   hasTranslationMark: boolean;
+  /** [발음] 아래 줄(빈 줄 포함, 원래 순서). 표시가 없으면 빈 배열 */
+  pronunciation: string[];
 }
 
 export type BundleParseResult = { ok: true; sections: BundleSection[] } | { ok: false; error: string };
@@ -164,7 +180,7 @@ export function parseTranslationBundle(input: string): BundleParseResult {
   const lines = sanitizeMultiline(input).split('\n');
   const sections: BundleSection[] = [];
   let cur: BundleSection | null = null;
-  let mode: 'original' | 'translation' = 'original';
+  let mode: 'original' | 'translation' | 'pronunciation' = 'original';
   for (const raw of lines) {
     if (FENCE.test(raw)) continue; // 바깥 AI가 감싼 코드 블록 표시
     const id = HEADER_ID.exec(raw);
@@ -180,6 +196,7 @@ export function parseTranslationBundle(input: string): BundleParseResult {
           .slice(0, 120),
         translation: [],
         hasTranslationMark: false,
+        pronunciation: [],
       };
       sections.push(cur);
       mode = 'original';
@@ -196,7 +213,12 @@ export function parseTranslationBundle(input: string): BundleParseResult {
       cur.hasTranslationMark = true;
       continue;
     }
+    if (mark === PRONUNCIATION_MARK) {
+      mode = 'pronunciation';
+      continue;
+    }
     if (mode === 'translation') cur.translation.push(raw);
+    else if (mode === 'pronunciation') cur.pronunciation.push(raw);
   }
   if (sections.length === 0) {
     return { ok: false, error: '번역 묶음 파일이 아닙니다(곡 머리글 "{lv:…}"을 찾지 못했습니다)' };
@@ -226,6 +248,19 @@ export type BundleItemStatus =
   /** 같은 곡이 파일에 두 번 있음(두 번째부터 건너뜀) */
   | 'duplicate';
 
+/** [발음] 칸 판단(D-35). 번역 상태(status)와 따로 본다. */
+export type BundlePronunciationStatus =
+  /** [발음] 칸이 없거나 비어 있음, 또는 일본어 행이 없는 곡(발음 대상 아님) */
+  | 'none'
+  /** 저장할 수 있음 */
+  | 'ready'
+  /** 이미 "내 발음"이 있어 건너뜀 */
+  | 'has-user-pronunciation'
+  /** 빈 줄을 뺀 줄 수가 원문과 다름 */
+  | 'line-count-mismatch'
+  /** 발음 칸에 일본어 글자가 남음(원문 복사)·너무 긴 줄 등 */
+  | 'invalid';
+
 export interface BundleItem {
   index: number;
   lyricsVersionId: string;
@@ -241,6 +276,11 @@ export interface BundleItem {
   replacesAi: boolean;
   /** ready일 때 저장할 매핑(행 ID → 번역) */
   lines: Record<string, string> | null;
+  pronunciationStatus: BundlePronunciationStatus;
+  /** 발음 행 수(빈 행 제외) */
+  pronouncedLines: number;
+  /** pronunciationStatus가 ready일 때 저장할 매핑(행 ID → 한글 발음, 일본어 행만) */
+  pronunciationLines: Record<string, string> | null;
 }
 
 export type BundleCounts = Record<BundleItemStatus, number>;
@@ -293,6 +333,9 @@ async function previewOne(store: LyricsStore, s: BundleSection, index: number, s
     translatedLines: nonEmpty.length,
     replacesAi: false,
     lines: null,
+    pronunciationStatus: 'none',
+    pronouncedLines: s.pronunciation.filter((l) => l.trim() !== '').length,
+    pronunciationLines: null,
   };
   const lv = await store.getLyricsVersion(s.lyricsVersionId);
   if (!lv) return { ...base, status: 'unknown-lyrics' };
@@ -308,6 +351,8 @@ async function previewOne(store: LyricsStore, s: BundleSection, index: number, s
   if (seen.has(lv.id)) return { ...item, status: 'duplicate' };
   seen.add(lv.id);
   if (!song || song.activeLyricsVersionId !== lv.id) return { ...item, status: 'lyrics-changed' };
+  // 발음은 번역과 따로 판단한다(이미 내 번역이 있는 곡도 발음만 넣을 수 있다, D-35).
+  Object.assign(item, await previewPronunciation(store, lv, s));
   const versions = await store.listTranslations(lv.id);
   if (versions.some((t) => t.origin === 'user')) return { ...item, status: 'has-user-translation' };
   if (nonEmpty.length === 0) return { ...item, status: 'empty' };
@@ -321,6 +366,41 @@ async function previewOne(store: LyricsStore, s: BundleSection, index: number, s
   const same = targets.every((t) => (proposed[t.id] ?? '').trim() === t.text.replace(/\s+/g, ' ').trim());
   if (same) return { ...item, status: 'same-as-original' };
   return { ...item, lines: proposed, replacesAi: versions.some((t) => t.origin === 'ai') };
+}
+
+async function previewPronunciation(
+  store: LyricsStore,
+  lv: LyricsVersion,
+  s: BundleSection,
+): Promise<Pick<BundleItem, 'pronunciationStatus' | 'pronunciationLines'>> {
+  const none = { pronunciationStatus: 'none' as const, pronunciationLines: null };
+  const nonEmpty = s.pronunciation.map((l) => l.trim()).filter((l) => l !== '');
+  if (nonEmpty.length === 0) return none;
+  const targets = translatableLines(lv);
+  if (!targets.some((t) => hasJapaneseScript(t.text))) return none; // 발음은 일본어 행에만 표시된다
+  const versions = await store.listPronunciations(lv.id);
+  if (versions.some((p) => p.origin === 'user')) {
+    return { pronunciationStatus: 'has-user-pronunciation', pronunciationLines: null };
+  }
+  if (nonEmpty.length !== targets.length)
+    return { pronunciationStatus: 'line-count-mismatch', pronunciationLines: null };
+  const edited: Record<string, string> = {};
+  const japanese: Record<string, string> = {};
+  targets.forEach((t, i) => {
+    edited[t.id] = nonEmpty[i] ?? '';
+    if (hasJapaneseScript(t.text)) japanese[t.id] = nonEmpty[i] ?? '';
+  });
+  if (Object.values(japanese).some((h) => hasJapaneseScript(h))) {
+    return { pronunciationStatus: 'invalid', pronunciationLines: null };
+  }
+  const built = buildUserPronunciation(lv, edited, selectPronunciation(versions));
+  if (!built.ok) return { pronunciationStatus: 'invalid', pronunciationLines: null };
+  return { pronunciationStatus: 'ready', pronunciationLines: japanese };
+}
+
+/** 미리보기에서 [발음]이 저장 가능한 곡 수 */
+export function countPronunciationReady(p: Pick<BundlePreview, 'items'>): number {
+  return p.items.filter((i) => i.pronunciationStatus === 'ready' && i.pronunciationLines).length;
 }
 
 // ------------------------------------------------------------------ 적용
@@ -337,8 +417,10 @@ export interface BundleApplyReport {
   /** 저장 직전에 다시 확인해 건너뛴 곡(그 사이 내 번역이 생김·가사가 바뀜) */
   skippedNow: number;
   failed: number;
-  /** 저장한 곡 ID(지금 재생 중인 곡이면 화면을 다시 읽는 데 쓴다) */
+  /** 저장한 곡 ID(번역·발음 중 하나라도. 지금 재생 중인 곡이면 화면을 다시 읽는 데 쓴다) */
   savedSongIds: string[];
+  /** [발음] 칸 저장 결과(D-35) */
+  pronunciation: { saved: number; skippedNow: number; failed: number };
 }
 
 /**
@@ -351,7 +433,13 @@ export async function applyTranslationBundle(
   preview: BundlePreview,
 ): Promise<BundleApplyReport> {
   const { store, clock, ids, logger } = deps;
-  const report: BundleApplyReport = { saved: 0, skippedNow: 0, failed: 0, savedSongIds: [] };
+  const report: BundleApplyReport = {
+    saved: 0,
+    skippedNow: 0,
+    failed: 0,
+    savedSongIds: [],
+    pronunciation: { saved: 0, skippedNow: 0, failed: 0 },
+  };
   for (const item of preview.items) {
     if (item.status !== 'ready' || !item.lines) continue;
     try {
@@ -386,9 +474,67 @@ export async function applyTranslationBundle(
       logger.error('bundle.save_failed', { message: e instanceof Error ? e.message.slice(0, 200) : 'unknown' });
     }
   }
+  await applyPronunciations(deps, preview, report);
   // 가사·번역·제목은 로그에 남기지 않는다(개수만).
-  logger.info('bundle.applied', { saved: report.saved, skippedNow: report.skippedNow, failed: report.failed });
+  logger.info('bundle.applied', {
+    saved: report.saved,
+    skippedNow: report.skippedNow,
+    failed: report.failed,
+    pronunciationSaved: report.pronunciation.saved,
+    pronunciationSkippedNow: report.pronunciation.skippedNow,
+    pronunciationFailed: report.pronunciation.failed,
+  });
   return report;
+}
+
+/**
+ * [발음] 칸 저장(D-35). 번역과 같은 방식: 곡마다 저장 직전에 다시 확인(그 사이 "내 발음"이 생김·가사가 바뀜이면
+ * 건너뜀)하고, 기존 "발음 고치기"와 같은 규칙으로 새 "내 발음" 버전을 원자적으로 추가한다. AI를 부르지 않는다.
+ */
+async function applyPronunciations(
+  deps: BundleApplyDeps,
+  preview: BundlePreview,
+  report: BundleApplyReport,
+): Promise<void> {
+  const { store, clock, ids, logger } = deps;
+  const r = report.pronunciation;
+  for (const item of preview.items) {
+    if (item.pronunciationStatus !== 'ready' || !item.pronunciationLines) continue;
+    try {
+      const lv = await store.getLyricsVersion(item.lyricsVersionId);
+      const song = lv ? await store.getSong(lv.songId) : null;
+      if (!lv || !song || song.activeLyricsVersionId !== lv.id) {
+        r.skippedNow++;
+        continue;
+      }
+      const versions = await store.listPronunciations(lv.id);
+      if (versions.some((p) => p.origin === 'user')) {
+        r.skippedNow++;
+        continue;
+      }
+      const built = buildUserPronunciation(lv, item.pronunciationLines, selectPronunciation(versions));
+      if (!built.ok) {
+        r.failed++;
+        continue;
+      }
+      await store.saveUserPronunciation({
+        id: ids.next('pr'),
+        lyricsVersionId: lv.id,
+        origin: 'user',
+        lines: built.lines,
+        sourceTextHash: lv.textHash,
+        provenance: null,
+        createdAtEpochMs: clock.nowEpochMs(),
+      });
+      r.saved++;
+      if (!report.savedSongIds.includes(song.id)) report.savedSongIds.push(song.id);
+    } catch (e) {
+      r.failed++;
+      logger.error('bundle.pronunciation_save_failed', {
+        message: e instanceof Error ? e.message.slice(0, 200) : 'unknown',
+      });
+    }
+  }
 }
 
 /** 미리보기 요약 문장(화면·접근성용). 0인 항목은 뺀다. */
@@ -403,5 +549,10 @@ export function summarizeBundle(p: Pick<BundlePreview, 'counts' | 'items'>): str
   const gone = c['unknown-lyrics'] + c['lyrics-changed'];
   if (gone) parts.push(`곡을 찾지 못함 ${gone}`);
   if (c.duplicate) parts.push(`중복 ${c.duplicate}`);
+  const pron = (st: BundlePronunciationStatus) => p.items.filter((i) => i.pronunciationStatus === st).length;
+  if (pron('ready')) parts.push(`발음 적용 가능 ${pron('ready')}`);
+  if (pron('has-user-pronunciation')) parts.push(`이미 내 발음 ${pron('has-user-pronunciation')}`);
+  const pronFix = pron('line-count-mismatch') + pron('invalid');
+  if (pronFix) parts.push(`발음 고칠 곳 ${pronFix}`);
   return `${p.items.length}곡${parts.length ? ` · ${parts.join(' · ')}` : ''}`;
 }

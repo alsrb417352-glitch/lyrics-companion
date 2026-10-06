@@ -19,6 +19,7 @@ import {
   type BundleSection,
 } from '../../src/batch/translation-bundle.js';
 import type { LyricsVersion } from '../../src/model.js';
+import { hasJapaneseScript } from '../../src/util/text.js';
 import { serviceKeyOf } from '../../src/matching/track-identity.js';
 import type { ServiceTrackRef } from '../../src/ports.js';
 
@@ -137,6 +138,11 @@ describe('AT-20 플레이리스트 번역 묶음 파일', () => {
     // [원문]과 [번역] 사이 = 빈 행을 뺀 원문 행
     const o = lines.indexOf('[원문]');
     const t = lines.indexOf('[번역]');
+    // 일본어 곡은 빈 [발음] 칸이 [원문] 앞에 있다(선택 입력, D-35)
+    const pr = lines.indexOf('[발음]');
+    expect(pr).toBeGreaterThan(0);
+    expect(pr).toBeLessThan(o);
+    expect(lines.slice(pr + 1, o).every((l) => l === '')).toBe(true);
     expect(lines.slice(o + 1, t)).toEqual(translatableLines(studio).map((l) => l.text));
     expect(lines.slice(t + 1).every((l) => l === '')).toBe(true);
     // 저장소만 읽음: 네트워크·AI 0회, 곡을 새로 만들지 않음
@@ -237,6 +243,7 @@ describe('AT-20 플레이리스트 번역 묶음 파일', () => {
       heading: '머리글 제목',
       translation,
       hasTranslationMark: true,
+      pronunciation: [],
     });
 
     // plain 곡은 내보낸 뒤 다른 판본(사용자가 고른 다른 가사)으로 바뀜
@@ -342,5 +349,134 @@ describe('AT-20 플레이리스트 번역 묶음 파일', () => {
     const tr = await h.store.listTranslations(studio.id);
     expect(Object.values(tr[0]!.lines)[0]).toBe(evil);
     expect(h.provider.calls).toHaveLength(0);
+  });
+
+  it('[AT-20][REQ-ED-05][REQ-ED-03] [발음] 칸: 번역과 함께 "내 발음"으로 저장되고(일본어 행만), 재생하면 AI 없이 바로 보인다', async () => {
+    const h = await harness({ autoTranslate: false });
+    await downloadLyrics(h, [TRACKS.jaStudio]);
+    const studio = await activeLyrics(h, TRACKS.jaStudio);
+    const targets = translatableLines(studio);
+    // 사용자가 직접 만든 파일 형태: [발음] → [원문] → [번역] 순서, 칸 사이 빈 줄
+    const text = [
+      BUNDLE_HEADER,
+      `### 1. 夜明けのホーム — Synthetic Band  {lv:${studio.id}}`,
+      '[발음]',
+      ...targets.map((_, i) => `발음${i + 1}`),
+      '',
+      '[원문]',
+      ...targets.map((l) => l.text),
+      '',
+      '[번역]',
+      ...targets.map((_, i) => `번역${i + 1}`),
+    ].join('\n');
+    const preview = await previewOf(h, text);
+    expect(preview.items[0]).toMatchObject({ status: 'ready', pronunciationStatus: 'ready' });
+    expect(summarizeBundle(preview)).toBe('1곡 · 적용 가능 1 · 발음 적용 가능 1');
+    expect(await h.store.listPronunciations(studio.id)).toHaveLength(0); // 미리보기는 저장하지 않음
+
+    const report = await applyTranslationBundle(h, preview);
+    expect(report).toMatchObject({ saved: 1, pronunciation: { saved: 1, skippedNow: 0, failed: 0 } });
+    expect(report.savedSongIds).toHaveLength(1);
+    const prons = await h.store.listPronunciations(studio.id);
+    expect(prons.map((p) => p.origin)).toEqual(['user']);
+    const japanese = targets.filter((l) => hasJapaneseScript(l.text));
+    expect(japanese.length).toBeGreaterThan(0);
+    expect(Object.keys(prons[0]!.lines).sort()).toEqual(japanese.map((l) => l.id).sort());
+    const firstJa = japanese[0]!;
+    expect(prons[0]!.lines[firstJa.id]).toEqual({ kana: null, hangul: `발음${targets.indexOf(firstJa) + 1}` });
+
+    await h.session.onTrackChanged(TRACKS.jaStudio);
+    await h.session.idle();
+    expect(h.session.current.pronunciation?.origin).toBe('user');
+    expect(h.session.current.translation?.origin).toBe('user');
+    expect(h.provider.calls).toHaveLength(0);
+    expect(h.sink.dump()).not.toContain('발음1');
+  });
+
+  it('[AT-20][REQ-ED-05][REQ-ED-03] [발음] 칸은 번역과 따로 판단한다: 내 번역이 있어도 발음만 저장, 내 발음·줄 수 다름·일본어 글자 남음은 건너뜀', async () => {
+    const h = await harness({ autoTranslate: false });
+    await downloadLyrics(h, [TRACKS.jaStudio, TRACKS.jaPlain]);
+    const studio = await activeLyrics(h, TRACKS.jaStudio);
+    const plain = await activeLyrics(h, TRACKS.jaPlain);
+    const n = translatableLines(studio).length;
+    const sec = (lyricsVersionId: string, pronunciation: string[], translation: string[] = []): BundleSection => ({
+      lyricsVersionId,
+      heading: '',
+      translation,
+      hasTranslationMark: true,
+      pronunciation,
+    });
+    // studio에는 이미 내 번역이 있다 → 번역은 건너뛰지만 발음은 저장
+    const first = translatableLines(studio)[0]!;
+    await h.store.saveUserTranslation({
+      id: 'tr-existing',
+      lyricsVersionId: studio.id,
+      origin: 'user',
+      lines: { [first.id]: '이미 있는 내 번역' },
+      sourceTextHash: studio.textHash,
+      provenance: null,
+      createdAtEpochMs: 1,
+    });
+    const pronAll = (lv: LyricsVersion) => translatableLines(lv).map((_, i) => `읽기 ${i}`);
+    const p1 = await previewTranslationBundle(h.store, [sec(studio.id, pronAll(studio), pronAll(studio))]);
+    expect(p1.items[0]).toMatchObject({ status: 'has-user-translation', pronunciationStatus: 'ready' });
+    const r1 = await applyTranslationBundle(h, p1);
+    expect(r1).toMatchObject({ saved: 0, pronunciation: { saved: 1 } });
+    expect((await h.store.listTranslations(studio.id)).map((t) => t.origin)).toEqual(['user']); // 번역은 그대로
+
+    // 다시 가져오면 이미 내 발음이 있어 건너뜀(새 버전을 쌓지 않음)
+    const p2 = await previewTranslationBundle(h.store, [sec(studio.id, pronAll(studio))]);
+    expect(p2.items[0]?.pronunciationStatus).toBe('has-user-pronunciation');
+    expect((await applyTranslationBundle(h, p2)).pronunciation.saved).toBe(0);
+    expect(await h.store.listPronunciations(studio.id)).toHaveLength(1);
+
+    // 줄 수 다름 / 일본어 글자가 남음(원문 복사) / 비어 있음
+    const p3 = await previewTranslationBundle(h.store, [sec(plain.id, pronAll(plain).slice(1))]);
+    expect(p3.items[0]).toMatchObject({ pronunciationStatus: 'line-count-mismatch' });
+    expect(summarizeBundle(p3)).toBe('1곡 · 번역 비어 있음 1 · 발음 고칠 곳 1');
+    const p4 = await previewTranslationBundle(h.store, [
+      sec(
+        plain.id,
+        translatableLines(plain).map((l) => l.text),
+      ),
+    ]);
+    expect(p4.items[0]?.pronunciationStatus).toBe('invalid');
+    const p5 = await previewTranslationBundle(h.store, [sec(plain.id, ['', ' '])]);
+    expect(p5.items[0]?.pronunciationStatus).toBe('none');
+    for (const p of [p3, p4, p5]) expect((await applyTranslationBundle(h, p)).pronunciation.saved).toBe(0);
+    expect(await h.store.listPronunciations(plain.id)).toHaveLength(0);
+    expect(n).toBeGreaterThan(0);
+  });
+
+  it('[AT-20][REQ-ED-05][REQ-ED-03] [발음] 칸도 저장 직전에 다시 확인한다 — 미리보기 뒤 생긴 내 발음 위에 쌓지 않는다', async () => {
+    const h = await harness({ autoTranslate: false });
+    await downloadLyrics(h, [TRACKS.jaStudio]);
+    const studio = await activeLyrics(h, TRACKS.jaStudio);
+    const parsed = parseTranslationBundle(
+      [
+        `### 1. x  {lv:${studio.id}}`,
+        '[발음]',
+        ...translatableLines(studio).map((_, i) => `읽기 ${i}`),
+        '[원문]',
+        '[번역]',
+      ].join('\n'),
+    );
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.sections[0]?.pronunciation).toHaveLength(translatableLines(studio).length);
+    const preview = await previewTranslationBundle(h.store, parsed.sections);
+    expect(preview.items[0]?.pronunciationStatus).toBe('ready');
+    const first = translatableLines(studio).find((l) => hasJapaneseScript(l.text))!;
+    await h.store.saveUserPronunciation({
+      id: 'pr-between',
+      lyricsVersionId: studio.id,
+      origin: 'user',
+      lines: { [first.id]: { kana: null, hangul: '그 사이 고친 발음' } },
+      sourceTextHash: studio.textHash,
+      provenance: null,
+      createdAtEpochMs: 2,
+    });
+    const r = await applyTranslationBundle(h, preview);
+    expect(r.pronunciation).toEqual({ saved: 0, skippedNow: 1, failed: 0 });
+    expect((await h.store.listPronunciations(studio.id)).map((p) => p.id)).toEqual(['pr-between']);
   });
 });

@@ -4,6 +4,7 @@ import {
   applyTranslationBundle,
   BUNDLE_LIMITS,
   buildTranslationBundle,
+  countPronunciationReady,
   parseTranslationBundle,
   previewTranslationBundle,
   summarizeBundle,
@@ -40,6 +41,26 @@ function itemLabel(it: BundleItem): string {
     case 'duplicate':
       return '파일에 같은 곡이 또 있음 — 건너뜀';
   }
+}
+
+/** [발음] 칸 상태(D-35). 발음 대상이 아니거나 비어 있으면 표시하지 않는다. */
+function pronunciationLabel(it: BundleItem): string | null {
+  switch (it.pronunciationStatus) {
+    case 'none':
+      return null;
+    case 'ready':
+      return '발음 저장';
+    case 'has-user-pronunciation':
+      return '이미 내 발음이 있음 — 발음 건너뜀';
+    case 'line-count-mismatch':
+      return `발음 줄 수가 다름(원문 ${it.originalLines} / 발음 ${it.pronouncedLines}) — 발음 건너뜀`;
+    case 'invalid':
+      return '발음 칸에 일본어 글자나 너무 긴 줄이 있음 — 발음 건너뜀';
+  }
+}
+
+function willSave(it: BundleItem): boolean {
+  return it.status === 'ready' || it.pronunciationStatus === 'ready';
 }
 
 function skippedNote(c: BundleExportCounts): string {
@@ -153,13 +174,20 @@ export function TranslationBundlePanel(props: {
       // 지금 재생 중인 곡에 저장했으면 화면을 저장소 기준으로 다시 연다(AI 호출 없음, 불변조건 1).
       const currentId = services.session.current.song?.id;
       if (currentId && r.savedSongIds.includes(currentId)) await services.session.reloadCurrent();
+      const p = r.pronunciation;
       const extra = [
         r.skippedNow ? `그 사이 내 번역이 생기거나 가사가 바뀐 ${r.skippedNow}곡은 건너뜀.` : '',
-        r.failed ? `${r.failed}곡은 저장하지 못했습니다.` : '',
+        r.failed ? `${r.failed}곡은 번역을 저장하지 못했습니다.` : '',
+        p.skippedNow ? `그 사이 내 발음이 생기거나 가사가 바뀐 ${p.skippedNow}곡은 발음 건너뜀.` : '',
+        p.failed ? `${p.failed}곡은 발음을 저장하지 못했습니다.` : '',
       ]
         .filter(Boolean)
         .join(' ');
-      setMsg({ text: `${r.saved}곡에 "내 번역"을 저장했습니다. ${extra}`, danger: r.failed > 0 });
+      const savedParts = [
+        r.saved || p.saved === 0 ? `${r.saved}곡에 "내 번역"` : '',
+        p.saved ? `${p.saved}곡에 "내 발음"` : '',
+      ].filter(Boolean);
+      setMsg({ text: `${savedParts.join(', ')}을 저장했습니다. ${extra}`, danger: r.failed + p.failed > 0 });
       setPreview(null);
       props.onSaved?.();
     } catch {
@@ -169,7 +197,8 @@ export function TranslationBundlePanel(props: {
     }
   };
 
-  const ready = preview?.counts.ready ?? 0;
+  const ready = preview?.items.filter(willSave).length ?? 0;
+  const pronReady = preview ? countPronunciationReady(preview) : 0;
 
   return (
     <View style={[styles.box, { borderColor: theme.border, backgroundColor: theme.surface }]}>
@@ -179,8 +208,9 @@ export function TranslationBundlePanel(props: {
       </View>
       <Note theme={theme}>
         ① 번역할 곡(가사 원문이 있고 내 번역이 없는 곡)을 한 파일로 내보내고 ② 각 곡의 [번역] 아래에 번역을 채운 뒤 ③
-        가져오면 여러 곡에 &quot;내 번역&quot;이 한 번에 저장됩니다. 줄 수가 원문과 같은 곡만 저장하고, 이미 내 번역이
-        있는 곡은 건너뜁니다.
+        가져오면 여러 곡에 &quot;내 번역&quot;이 한 번에 저장됩니다. 일본어 곡은 [발음] 칸에 한글 발음을 적으면 &quot;내
+        발음&quot;도 함께 저장됩니다. 줄 수가 원문과 같은 곡만 저장하고, 이미 내 번역·내 발음이 있으면 그 부분은
+        건너뜁니다.
       </Note>
       {msg ? (
         <Note theme={theme} tone={msg.danger ? 'danger' : 'dim'}>
@@ -240,7 +270,8 @@ export function TranslationBundlePanel(props: {
           {preview ? <Note theme={theme}>{summarizeBundle(preview)}</Note> : null}
           <Note theme={theme}>
             &quot;저장&quot;을 누르면 아래 저장 표시된 곡마다 새 &quot;내 번역&quot;이 추가되어 AI 번역보다 먼저
-            보입니다. 기존 번역은 지워지지 않습니다. 건너뛴 곡은 그 곡의 번역 편집에서 따로 고칠 수 있습니다.
+            보입니다{pronReady > 0 ? ` (발음 ${pronReady}곡 포함)` : ''}. 기존 번역·발음은 지워지지 않습니다. 건너뛴
+            곡은 그 곡의 번역 편집·발음 고치기에서 따로 고칠 수 있습니다.
           </Note>
           <FlatList
             style={styles.grow}
@@ -249,9 +280,9 @@ export function TranslationBundlePanel(props: {
             renderItem={({ item }) => (
               <View style={[styles.item, { borderColor: theme.border }]}>
                 <Icon
-                  name={item.status === 'ready' ? 'check' : 'close'}
+                  name={willSave(item) ? 'check' : 'close'}
                   size={16}
-                  color={item.status === 'ready' ? theme.accent : theme.textFaint}
+                  color={willSave(item) ? theme.accent : theme.textFaint}
                 />
                 <View style={styles.grow}>
                   <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
@@ -261,6 +292,16 @@ export function TranslationBundlePanel(props: {
                   <Text style={{ color: item.status === 'ready' ? theme.textDim : theme.textFaint, fontSize: 13 }}>
                     {itemLabel(item)}
                   </Text>
+                  {pronunciationLabel(item) ? (
+                    <Text
+                      style={{
+                        color: item.pronunciationStatus === 'ready' ? theme.textDim : theme.textFaint,
+                        fontSize: 13,
+                      }}
+                    >
+                      {pronunciationLabel(item)}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             )}

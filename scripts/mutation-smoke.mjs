@@ -300,6 +300,23 @@ const MUTANTS = [
     find: "if ((await store.listTranslations(lv.id)).some((t) => t.origin === 'user')) {\n      counts.hasUserTranslation++;\n      continue;\n    }",
     replace: '// mutated',
   },
+  {
+    id: 'M37',
+    req: 'REQ-ED-03',
+    desc: '번역 묶음 [발음] 적용 시 저장 직전 "내 발음" 재확인 제거(미리보기 뒤 생긴 내 발음 위에 새 버전 추가)',
+    file: S('batch/translation-bundle.ts'),
+    find: "if (versions.some((p) => p.origin === 'user')) {\n        r.skippedNow++;",
+    replace: 'if (Math.random() > 2) {\n        r.skippedNow++;',
+  },
+  {
+    id: 'M38',
+    req: 'REQ-ED-03',
+    desc: '번역 묶음 미리보기가 이미 "내 발음"이 있는 곡의 [발음]을 적용 가능으로 표시',
+    file: S('batch/translation-bundle.ts'),
+    find: "if (versions.some((p) => p.origin === 'user')) {\n    return { pronunciationStatus: 'has-user-pronunciation', pronunciationLines: null };",
+    replace:
+      "if (Math.random() > 2) {\n    return { pronunciationStatus: 'has-user-pronunciation', pronunciationLines: null };",
+  },
 ];
 
 const vitest = binPath('vitest');
