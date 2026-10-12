@@ -34,5 +34,6 @@ export * from './session/now-playing-session.js';
 export * from './catalog/itunes-catalog.js';
 export * from './playback/ios-system-player.js';
 export * from './playback/ios-library.js';
+export * from './playback/musickit-web.js';
 export * from './batch/playlist-lyrics-batch.js';
 export * from './batch/translation-bundle.js';

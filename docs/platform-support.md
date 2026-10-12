@@ -18,6 +18,7 @@
 | Android × Spotify | 위와 같음 | 위와 같음 | 위와 같음 | OS MediaSession(권장). Spotify SDK는 정책 위험으로 보류 | 문서 확인(OS API) / 정책 검토 필요 | 미확인 |
 | Android × YouTube Music | 위와 같음 | 위와 같음 | 위와 같음 | OS MediaSession | 문서 확인(OS API) / 앱 동작 미확인 | 미확인 |
 | iOS × Apple Music | `nowPlayingItem`(제목·아티스트·앨범·길이·스토어 ID) | `playbackState`, 곡 변경 알림, `currentPlaybackTime` 조회 | 재생·일시정지·다음/이전·대기열 설정(우리 앱에서 곡 선택 가능) | MediaPlayer `systemMusicPlayer` / MusicKit `SystemMusicPlayer` | 문서 일부 | 미확인 |
+| **Windows × Apple Music 웹**(Chrome/Edge, 2026-10-06 추가) | MusicKit JS `nowPlayingItem`(제목·가수·앨범·길이·카탈로그 ID·**ISRC**) | `playbackState`·이벤트, 위치는 `<audio>`의 `currentTime`(MusicKit 값은 정수 초) | 재생·일시정지·탐색·이전/다음·대기열 위치 재생 | 브라우저 확장 프로그램(페이지 MAIN world 스크립트) | **페이지에서 직접 확인**(구조·값 정밀도, 로그인 안 한 미리듣기) / 로그인 재생·장시간 동작은 미확인 | 미확인 |
 | iOS × Spotify | 공개 OS API 없음. Spotify iOS SDK(App Remote)로 가능하나 **정책상 싱크 금지 위험** | 같음 | 같음 | **수동 흐름 기본**, SDK는 권리 검토 후 결정 | 문서 확인(정책) | 미확인 |
 | iOS × YouTube Music | 공개 API 없음 | 없음 | 없음 | **수동 흐름만** | 미확인(공식 API 부재) | 미확인 |
 
@@ -70,6 +71,16 @@
 - iTunes Search는 `country=kr`에서 0건이지만, **Lookup(`/lookup?id=…&country=kr`)은 결과가 있다** → 검색으로 얻은 jp 스토어 ID가 한국 스토어에도 있다는 근거(재생 가능 여부는 MV-PB-IOS-03).
 - LRCLIB `/api/get` 적중은 표기마다 다르다(예: Marigold/aimyon 적중, マリーゴールド/あいみょん 미적중; Lemon은 요네즈 켄시·米津玄師 모두 적중). → 여러 표기로 차례로 조회(core `AppleMusicLyricsProvider`, D-18).
 
+### 2.8 Windows × Apple Music 웹 플레이어(Chrome/Edge 확장 프로그램) — 2026-10-06 확인(D-36)
+music.apple.com 페이지(로그인 없이 한국 storefront)를 내장 브라우저로 열어 콘솔에서 직접 확인했다.
+- `window.MusicKit` 존재, `MusicKit.version` = `playback/AppleMusic-2640.11.0-external`(웹 플레이어 내부 빌드 — **공개 API 문서와 다를 수 있고 Apple이 예고 없이 바꿀 수 있다**). `MusicKit.getInstance()`에 `nowPlayingItem`·`playbackState`·`currentPlaybackTime`·`playbackRate`·`previewOnly`·`storefrontId`('kr')·`queue`·`seekToTime`·`play`·`pause`·`skipToNextItem`·`skipToPreviousItem`·`changeToMediaAtIndex`·`addEventListener` 있음.
+- `MusicKit.PlaybackStates`: 0 none, 1 loading, 2 playing, 3 paused, 4 stopped, 5 ended, 6 seeking, 8 waiting, 9 stalled, 10 completed. 이벤트: `playbackStateDidChange`, `nowPlayingItemDidChange`, `playbackTimeDidChange`, `playbackRateDidChange`, `queueItemsDidChange`, `queuePositionDidChange` 등.
+- 카탈로그 곡 MediaItem: `id`(카탈로그 ID, 숫자 문자열), `type`='song', `attributes{name, artistName, albumName, durationInMillis, isrc, playParams{id, kind:'song'}}`. 한국 storefront에서 가수 표기는 현지화(예: 요네즈 켄시) — iPhone과 같은 문제라 D-18 조회 순서를 그대로 쓴다. **ISRC가 있다**(iPhone Music 앱은 없음) → 곡 식별 ② 단계(ISRC 자동 연결)를 쓸 수 있다. 보관함 곡은 `id`가 'i.…'이고 `playParams.catalogId`에 카탈로그 ID가 있을 것으로 본다(로그인 필요, 미확인).
+- **위치 정밀도**: 음소거 미리듣기를 0.4초 간격으로 읽었더니 `currentPlaybackTime`은 0,1,1,2,2,2,3,3(정수 반올림), 같은 순간 `<audio id="apple-music-player">.currentTime`은 0.36, 0.76, 1.16 … 3.17(소수). → 오디오 요소 값을 쓴다(core `pickMusicKitPositionSec`).
+- **미리듣기**: 로그인하지 않으면 `previewOnly=true`, 길이 30초(`currentPlaybackDuration`=30)로 곡의 일부 구간만 재생된다 → 위치를 곡 위치로 쓰지 않는다(위치 모름).
+- **권한·정책**: 확장 프로그램은 `https://music.apple.com/*` 페이지 스크립트로 지금 재생·대기열 값만 읽고 재생 명령만 보낸다. Apple 계정 정보·Music User Token·개발자 토큰을 읽거나 Apple API를 따로 호출하지 않는다. 웹 플레이어 내부 객체를 읽는 방식이 Apple Music 이용약관상 허용되는지는 **미확인**(§5 MV-LEGAL-01에 추가).
+- **대안 검토**: Electron 등 별도 데스크톱 앱에 웹 플레이어를 넣으면 Widevine DRM이 없어 전체 곡 재생이 안 됨(castlabs 빌드·VMP 서명 필요) → 기각. Windows 미디어 세션(SMTC)으로 브라우저 재생 정보를 읽는 방식은 곡 ID·ISRC가 없고 위치 갱신 정밀도가 불확실 → 보류.
+
 ### 2.5 iOS × Spotify / YouTube Music (지원 안 함, D-17)
 - 다른 앱의 재생 정보를 읽는 공개 OS API가 없음(`MPNowPlayingInfoCenter`는 자기 앱 정보 게시용). 비공개 프레임워크는 사용하지 않는다.
 - Spotify iOS SDK(App Remote)는 기술적으로 가능하나 위 정책 문제 + 일시정지 후 연결 끊김 보고 → **기본은 수동 흐름**.
@@ -98,6 +109,7 @@ API를 쓸 수 있다는 것과 배포·표시 권리가 있다는 것은 다르
 | YouTube Music | 서비스 약관 | 미확인 |
 | 앱 스토어 | 알림 리스너·오버레이 권한 사용 정책(Google Play), App Review 지침 | 미확인 |
 | iTunes Search API | 홍보·제휴 목적 API의 이용 조건, 호출 제한(약 분당 20회로 알려짐, 미확인) | 미확인 |
+| Apple Music 웹 플레이어(PC 확장 프로그램) | 페이지의 MusicKit 객체·오디오 요소 값을 확장 프로그램이 읽고 재생을 제어하는 것이 서비스 약관상 허용되는지, 크롬 웹 스토어 정책(배포 시) | 미확인 |
 | Sideloadly(무료 서명) | 제3자 도구에 Apple ID 로그인 필요, Apple 계정 약관상 개인 개발용 서명 범위 | 미확인 |
 
 **현재 결정**: 개인 사용 목적의 개발·검증까지만 진행한다. 다른 사람에게 배포하기 전에 위 항목을 검토한다(docs/plan.md D-07).

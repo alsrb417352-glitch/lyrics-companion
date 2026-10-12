@@ -19,6 +19,8 @@ import { hasJapaneseScript, sanitizeLine, sanitizeMultiline } from '../util/text
  *  3. 가져오기: 머리글의 판본 ID로 곡을 정확히 찾고(제목으로 추측하지 않음, 불변조건 6), 곡마다
  *     기존 "번역 직접 입력"과 같은 규칙(previewTxtImport: 빈 행 제외 행 수가 같을 때만)으로 맞춘다.
  *     미리보기에서 사용자가 확인한 뒤에만 저장한다.
+ *     판본 ID가 이 기기에 없으면(다른 기기 — 예: iPhone에서 만든 파일을 PC에서 가져옴, D-38) [원문]이 글자 그대로
+ *     같은 저장된 가사를 찾는다. 같은 원문 곡이 여럿이면 고르지 않고 건너뛴다.
  *
  * 규칙
  * - 파일은 불신 데이터: 크기·곡 수 제한, 판본 ID 형식 검사, 머리글의 제목은 표시에 쓰지 않음(저장소 값 사용).
@@ -166,6 +168,11 @@ export interface BundleSection {
   hasTranslationMark: boolean;
   /** [발음] 아래 줄(빈 줄 포함, 원래 순서). 표시가 없으면 빈 배열 */
   pronunciation: string[];
+  /**
+   * [원문] 아래 줄(빈 줄 포함). 판본 ID가 이 기기에 없을 때(다른 기기에서 내보낸 파일) 원문이 똑같은
+   * 저장된 가사를 찾는 데만 쓴다(D-38). 저장하지 않는다.
+   */
+  original?: string[];
 }
 
 export type BundleParseResult = { ok: true; sections: BundleSection[] } | { ok: false; error: string };
@@ -197,6 +204,7 @@ export function parseTranslationBundle(input: string): BundleParseResult {
         translation: [],
         hasTranslationMark: false,
         pronunciation: [],
+        original: [],
       };
       sections.push(cur);
       mode = 'original';
@@ -219,6 +227,7 @@ export function parseTranslationBundle(input: string): BundleParseResult {
     }
     if (mode === 'translation') cur.translation.push(raw);
     else if (mode === 'pronunciation') cur.pronunciation.push(raw);
+    else cur.original?.push(raw);
   }
   if (sections.length === 0) {
     return { ok: false, error: '번역 묶음 파일이 아닙니다(곡 머리글 "{lv:…}"을 찾지 못했습니다)' };
@@ -241,8 +250,10 @@ export type BundleItemStatus =
   | 'same-as-original'
   /** 깨진 글자·너무 긴 줄 등 */
   | 'invalid'
-  /** 이 기기에 없는 가사 판본(다른 기기에서 만든 파일 등) */
+  /** 이 기기에 없는 가사 판본이고, [원문]이 똑같은 저장된 가사도 없음(다른 기기에서 만든 파일 등) */
   | 'unknown-lyrics'
+  /** 판본 ID는 없고 [원문]이 똑같은 저장된 곡이 둘 이상(어느 곡인지 추측하지 않음, 불변조건 6) */
+  | 'ambiguous-lyrics'
   /** 내보낸 뒤 그 곡의 가사를 다른 판본으로 바꿈 */
   | 'lyrics-changed'
   /** 같은 곡이 파일에 두 번 있음(두 번째부터 건너뜀) */
@@ -263,7 +274,10 @@ export type BundlePronunciationStatus =
 
 export interface BundleItem {
   index: number;
+  /** 이 기기의 가사 판본 ID(저장에 쓴다). 원문으로 찾았으면 파일의 ID와 다르다 */
   lyricsVersionId: string;
+  /** 곡을 찾은 방법: 파일의 판본 ID / [원문]이 똑같은 저장된 가사(다른 기기에서 만든 파일, D-38) / 못 찾음 */
+  matchedBy: 'id' | 'original-text' | null;
   songId: string | null;
   title: string;
   artist: string;
@@ -299,6 +313,7 @@ export function emptyBundleCounts(): BundleCounts {
     'same-as-original': 0,
     invalid: 0,
     'unknown-lyrics': 0,
+    'ambiguous-lyrics': 0,
     'lyrics-changed': 0,
     duplicate: 0,
   };
@@ -312,19 +327,63 @@ export async function previewTranslationBundle(
   const items: BundleItem[] = [];
   const counts = emptyBundleCounts();
   const seen = new Set<string>();
+  const byText = new OriginalTextIndex(store);
   for (const [index, s] of sections.entries()) {
-    const item = await previewOne(store, s, index, seen);
+    const item = await previewOne(store, s, index, seen, byText);
     items.push(item);
     counts[item.status]++;
   }
   return { items, counts };
 }
 
-async function previewOne(store: LyricsStore, s: BundleSection, index: number, seen: Set<string>): Promise<BundleItem> {
+/** 원문 비교용 정규화: 빈 줄 제외, 공백 하나로, 유니코드 정규화(NFC — 복사·붙여넣기로 바뀐 경우 대비) */
+function originalKey(lines: readonly string[]): string {
+  return lines
+    .map((l) => sanitizeLine(l).normalize('NFC').replace(/\s+/g, ' ').trim())
+    .filter((l) => l !== '')
+    .join('\n');
+}
+
+/**
+ * [원문] → 이 기기의 활성 가사 판본(D-38). 다른 기기(iPhone)에서 내보낸 묶음 파일은 판본 ID가 이 기기(PC)에 없으므로,
+ * 원문이 **글자 그대로 같은** 저장된 가사(곡의 활성 판본)를 찾는다. 같은 원문 곡이 둘 이상이면 고르지 않는다.
+ * 제목·가수로는 찾지 않는다(현지화 표기·라이브/리믹스 혼동, 불변조건 6). 저장소만 읽는다.
+ */
+class OriginalTextIndex {
+  private index: Map<string, string[]> | null = null;
+  constructor(private readonly store: LyricsStore) {}
+
+  async find(original: readonly string[] | undefined): Promise<string[]> {
+    const key = originalKey(original ?? []);
+    if (key === '') return [];
+    if (!this.index) {
+      const m = new Map<string, string[]>();
+      for (const song of await this.store.listSongs()) {
+        if (!song.activeLyricsVersionId) continue;
+        const lv = await this.store.getLyricsVersion(song.activeLyricsVersionId);
+        if (!lv) continue;
+        const k = originalKey(translatableLines(lv).map((l) => l.text));
+        if (k === '') continue;
+        m.set(k, [...(m.get(k) ?? []), lv.id]);
+      }
+      this.index = m;
+    }
+    return this.index.get(key) ?? [];
+  }
+}
+
+async function previewOne(
+  store: LyricsStore,
+  s: BundleSection,
+  index: number,
+  seen: Set<string>,
+  byText: OriginalTextIndex,
+): Promise<BundleItem> {
   const nonEmpty = s.translation.map((l) => l.trim()).filter((l) => l !== '');
   const base: BundleItem = {
     index,
     lyricsVersionId: s.lyricsVersionId,
+    matchedBy: null,
     songId: null,
     title: s.heading,
     artist: '',
@@ -337,12 +396,21 @@ async function previewOne(store: LyricsStore, s: BundleSection, index: number, s
     pronouncedLines: s.pronunciation.filter((l) => l.trim() !== '').length,
     pronunciationLines: null,
   };
-  const lv = await store.getLyricsVersion(s.lyricsVersionId);
-  if (!lv) return { ...base, status: 'unknown-lyrics' };
+  let lv = await store.getLyricsVersion(s.lyricsVersionId);
+  let matchedBy: BundleItem['matchedBy'] = lv ? 'id' : null;
+  if (!lv) {
+    const found = await byText.find(s.original);
+    if (found.length > 1) return { ...base, status: 'ambiguous-lyrics' };
+    lv = found[0] ? await store.getLyricsVersion(found[0]) : null;
+    if (!lv) return { ...base, status: 'unknown-lyrics' };
+    matchedBy = 'original-text';
+  }
   const song: Song | null = await store.getSong(lv.songId);
   const targets = translatableLines(lv);
   const item: BundleItem = {
     ...base,
+    lyricsVersionId: lv.id,
+    matchedBy,
     songId: lv.songId,
     title: song?.title ?? s.heading,
     artist: song?.artist ?? '',
@@ -548,6 +616,9 @@ export function summarizeBundle(p: Pick<BundlePreview, 'counts' | 'items'>): str
   if (fix) parts.push(`고칠 곳 있음 ${fix}`);
   const gone = c['unknown-lyrics'] + c['lyrics-changed'];
   if (gone) parts.push(`곡을 찾지 못함 ${gone}`);
+  if (c['ambiguous-lyrics']) parts.push(`같은 원문 곡 여러 개 ${c['ambiguous-lyrics']}`);
+  const byText = p.items.filter((i) => i.matchedBy === 'original-text').length;
+  if (byText) parts.push(`원문으로 찾음 ${byText}`);
   if (c.duplicate) parts.push(`중복 ${c.duplicate}`);
   const pron = (st: BundlePronunciationStatus) => p.items.filter((i) => i.pronunciationStatus === st).length;
   if (pron('ready')) parts.push(`발음 적용 가능 ${pron('ready')}`);

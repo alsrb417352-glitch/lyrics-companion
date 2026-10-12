@@ -68,6 +68,24 @@ const steps = [
     },
   },
   {
+    name: 'pc',
+    label: 'PC 확장 프로그램 타입 검사·빌드(apps/pc-extension, 의존성 설치 시에만)',
+    run: () => {
+      const appDir = join(ROOT, 'apps', 'pc-extension');
+      const tsc = join(appDir, 'node_modules', 'typescript', 'bin', 'tsc');
+      if (!existsSync(tsc)) {
+        console.log(
+          '건너뜀: apps/pc-extension 의존성이 설치되지 않았습니다(cd apps/pc-extension && npm ci). 결과는 "skip"으로 기록합니다.',
+        );
+        return { code: 0, durationMs: 0, skipped: true };
+      }
+      const t = runNode(tsc, ['--noEmit', '-p', join(appDir, 'tsconfig.json')]);
+      if (t.code !== 0) return t;
+      const b = runNode(join(appDir, 'build.mjs'), []);
+      return { code: b.code, durationMs: t.durationMs + b.durationMs };
+    },
+  },
+  {
     name: 'secrets',
     label: '비밀정보 검사',
     run: () => runNode(join(ROOT, 'scripts', 'scan-secrets.mjs'), []),
@@ -130,7 +148,7 @@ const summary = {
   tests,
   ok: failed.length === 0,
   scope:
-    '자동 검사는 core 도메인 로직(가짜 제공자·가짜 시계·실제 SQLite)과 앱 TypeScript 타입만 검증한다. 실기기, 실제 스트리밍 앱 연동, 실제 AI 호출, iOS 네이티브(Swift) 빌드는 포함하지 않는다(iOS 빌드는 GitHub Actions ios-unsigned-ipa, 실기기는 docs/testing.md 수동 절차).',
+    '자동 검사는 core 도메인 로직(가짜 제공자·가짜 시계·실제 SQLite)과 앱 TypeScript 타입·PC 확장 프로그램 빌드만 검증한다. 실기기, 실제 스트리밍 앱 연동, 실제 AI 호출, iOS 네이티브(Swift) 빌드는 포함하지 않는다(iOS 빌드는 GitHub Actions ios-unsigned-ipa, 실기기는 docs/testing.md 수동 절차).',
 };
 writeFileSync(join(REPORT_DIR, 'latest.json'), JSON.stringify(summary, null, 2) + '\n');
 appendFileSync(join(REPORT_DIR, 'history.jsonl'), JSON.stringify({ ...summary, root: undefined }) + '\n');

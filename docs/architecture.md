@@ -149,3 +149,27 @@ idle → resolving → (needs-confirmation → [confirm|reject]) → loading-lyr
 - 수동 싱크(D-28): `SyncRecordScreen`(버튼 onPressIn 순간의 `estimatePositionMs`를 기록, 되돌리기 시 3초 앞으로 이동) → `NowPlayingSession.saveUserTiming`/`clearUserTiming`. 줄 탭 이동은 `session.lineStartMs(i)`(기록이 있으면 기록 시각).
 - 지금 재생 하단: 자주 쓰지 않는 기능(가사 바꾸기·번역 입력·발음 고치기·원문 txt·싱크 기록·되돌리기)은 "도구" 버튼 안에 모았다. 시간 정보 없는 가사면 "싱크 직접 기록"을 바로 보인다.
 - 남은 것: Android 모듈(Kotlin, Phase 6), TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제(Phase 4).
+
+## §14 PC 확장 프로그램 (`apps/pc-extension`, Windows Chrome/Edge — 2026-10-06, D-36)
+```
+[music.apple.com 탭]
+  page-bridge.js (MAIN world: MusicKit 인스턴스·<audio id="apple-music-player">에서 원시 값만 읽음, 재생 명령 실행)
+        │ window.postMessage (TAG lc-v1, 같은 출처만)
+  relay.js (ISOLATED world: 패널이 열려 있을 때만 Port 'lc-tab' 연결)
+        │ chrome.runtime Port
+[사이드 패널 panel.html / 따로 띄운 창 panel.html?window=1]  ← Web Locks로 한 곳만 저장소를 연다
+  TabsPlayback(PlaybackSource) → core mapMusicKitSnapshot / remoteCaptureMonotonic → usePlayback(PositionFilter) → NowPlayingSession
+  SqlJsDriver(SqlDriver, sql.js WASM) ⇄ IndexedDB('lyrics-companion'/files/main: DB 파일 통째)
+  NativeSecretStore(SecretStore) ⇄ 네이티브 메시징 com.lyrics_companion.secret_store (secret-host.ps1, DPAPI)
+  FetchHttpClient → LRCLIB · iTunes(host_permissions) · AI 제공자(optional_host_permissions, 사용자 허용)
+```
+- **판단 로직은 iPhone 앱과 같은 core**를 쓴다(`services.ts`의 조립 구조도 `apps/mobile/src/services.ts`와 같음). PC 전용 core 코드는 웹 플레이어 값 해석 `playback/musickit-web.ts` 하나(AT-21, unit/musickit-web).
+- **재생 정보**: MusicKit `currentPlaybackTime`은 정수 초로 반올림돼 있어(2026-10-06 페이지에서 확인) 실제 소리를 내는 `<audio>`의 `currentTime`을 쓴다. 둘이 1.5초 넘게 다르면 다른 미디어로 보고 MusicKit 값을 쓴다. 미리듣기(`previewOnly`)면 위치 모름. 측정 시각은 페이지의 `performance.timeOrigin + now()`를 받아 전달 지연(0~1초)만큼만 앞당기고, 그 밖이면 받은 시각(위치를 앞서 추정하지 않음, D-25와 같은 원칙). 재생 중 0.25초·멈춤 1초 간격 + MusicKit 이벤트(곡·상태·속도·대기열 변경) 즉시 전송, 패널이 없으면 읽지 않는다.
+- **곡 식별**: MediaItem의 카탈로그 ID(보관함 곡은 `playParams.catalogId`)를 `serviceTrackId`로, ISRC도 검증해 넣는다. iOS와 같은 `service: 'apple-music'`·스토어 ID라 백업을 옮기면 같은 곡으로 연결된다. 노래가 아닌 항목(뮤직비디오·라디오)은 곡으로 보지 않는다.
+- **여러 탭**: 가장 최근 재생 중이던 탭을 따르고 재생 명령도 그 탭으로 보낸다. 설치 전에 열린 탭은 패널이 열릴 때 `chrome.scripting`으로 스크립트를 넣는다(가드로 중복 실행 방지).
+- **저장소**: sql.js 메모리 DB + **쓰기 끝날 때마다**(트랜잭션 밖 쓰기 또는 COMMIT) DB 파일 전체를 IndexedDB에 `durability: 'strict'`로 저장한 뒤 돌아간다 → "작업 in_flight 기록 → AI 요청" 순서가 디스크에서도 지켜진다(INV-7·INV-8). ROLLBACK이면 마지막 저장본 그대로. 마이그레이션 전에는 `main.bak-v<n>` 사본 1개. `unlimitedStorage` + `navigator.storage.persist()`로 브라우저 정리 대상에서 뺀다. Chrome·Edge·프로필마다 저장소가 따로다.
+- **한 곳에서만 열기**: 사이드 패널과 따로 띄운 창은 같은 확장 프로그램 출처의 같은 IndexedDB를 쓰므로 Web Locks(`lyrics-companion-db`)로 하나만 연다(둘이 열리면 마지막 저장이 앞의 저장을 덮어쓸 수 있음). "따로 띄운 창으로 열기"는 창을 연 뒤 패널을 닫아 잠금을 넘긴다.
+- **화면**(`src/ui`, React DOM): 지금 재생(가사·발음/번역 토글·곡별 보정·번역 요청·후보 확인·도구: 가사 바꾸기·번역 직접 입력·발음 고치기·원문 TXT·싱크 직접 기록(스페이스바·Enter로도 기록)·원래 싱크로), 대기열(iPhone 플레이리스트 탭 대신: 웹 플레이어의 현재 대기열, 곡 클릭 재생, 가사 원문 일괄 받기, 번역 묶음), 설정(전체 싱크 보정·제공자·키·자동 번역·백업). 파일은 다운로드 폴더로 내보내고 파일 선택 창으로 가져온다(downloads 권한 없음).
+- **데모**: `npm run demo` — 가짜 재생기·합성 가사·메모리 저장소로 화면만 확인(네트워크 없음, 확장 프로그램에 포함되지 않음, `.tmp/pc-demo`).
+- **빌드**: esbuild(IIFE, chrome116) → `dist/`. sql.js 브라우저 빌드를 복사(eval 없음, CSP `wasm-unsafe-eval`만 추가). 아이콘은 `build.mjs`가 직접 그린 PNG. 매니페스트 `key`로 확장 프로그램 ID 고정(`ggohabnpccimkbiclbehihpgiocjedhd`, 보안 저장소 도우미의 `allowed_origins`).
+- 남은 것: 실제 Apple Music 웹 연동 확인(MV-PC-01), 보관함 플레이리스트 목록(웹 플레이어 대기열로 대신함), 확장 프로그램 패키징(.crx)·스토어 배포(배포 전 권리 검토, D-07).

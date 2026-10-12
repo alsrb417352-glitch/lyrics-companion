@@ -24,6 +24,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix apps/pc-extension # PC 확장 프로그램 타입 검사·빌드(check의 pc 단계)
       - run: npm run check
 
   windows-korean-path:

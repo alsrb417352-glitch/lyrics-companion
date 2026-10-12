@@ -21,7 +21,17 @@ import {
 import type { LyricsVersion } from '../../src/model.js';
 import { hasJapaneseScript } from '../../src/util/text.js';
 import { serviceKeyOf } from '../../src/matching/track-identity.js';
-import type { ServiceTrackRef } from '../../src/ports.js';
+import type { IdGenerator, ServiceTrackRef } from '../../src/ports.js';
+
+/** 설치본(기기)마다 다른 ID(앱의 UUID처럼 서로 겹치지 않게) */
+class PrefixedIds implements IdGenerator {
+  private n = 0;
+  constructor(private readonly tag: string) {}
+  next(prefix: string): string {
+    this.n += 1;
+    return `${prefix}_${this.tag}${this.n}`;
+  }
+}
 
 const open: Harness[] = [];
 async function harness(...args: Parameters<typeof createHarness>): Promise<Harness> {
@@ -478,5 +488,81 @@ describe('AT-20 플레이리스트 번역 묶음 파일', () => {
     const r = await applyTranslationBundle(h, preview);
     expect(r.pronunciation).toEqual({ saved: 0, skippedNow: 1, failed: 0 });
     expect((await h.store.listPronunciations(studio.id)).map((p) => p.id)).toEqual(['pr-between']);
+  });
+
+  it('[AT-20][REQ-ED-05][REQ-LY-03] 다른 기기(iPhone)에서 만든 파일: 판본 ID가 없어도 [원문]이 글자 그대로 같은 저장된 가사에 연결하고, 같은 원문 곡이 여럿이거나 원문이 다르면 저장하지 않는다', async () => {
+    // 기기 A(iPhone): 원문을 받아 묶음을 내보내고 번역을 채움
+    const a = await harness({ autoTranslate: false, ids: new PrefixedIds('a') });
+    await downloadLyrics(a, [TRACKS.jaStudio, TRACKS.jaPlain]);
+    const exported = await buildTranslationBundle(a.store, { label: 'p', tracks: [TRACKS.jaStudio, TRACKS.jaPlain] });
+    const filled = fillBundle(exported.text, translateAll);
+
+    // 기기 B(PC): 같은 곡 원문을 따로 받음 → 판본 ID는 서로 다르다
+    const b = await harness({ autoTranslate: false, ids: new PrefixedIds('b') });
+    // 원문을 받기 전에는 찾을 곡이 없다
+    const before = await previewOf(b, filled);
+    expect(before.items.map((i) => i.status)).toEqual(['unknown-lyrics', 'unknown-lyrics']);
+    await downloadLyrics(b, [TRACKS.jaStudio, TRACKS.jaPlain]);
+    const studioB = await activeLyrics(b, TRACKS.jaStudio);
+    const plainB = await activeLyrics(b, TRACKS.jaPlain);
+    expect(studioB.id).not.toBe((await activeLyrics(a, TRACKS.jaStudio)).id);
+
+    const preview = await previewOf(b, filled);
+    expect(preview.items.map((i) => [i.status, i.matchedBy, i.lyricsVersionId])).toEqual([
+      ['ready', 'original-text', studioB.id],
+      ['ready', 'original-text', plainB.id],
+    ]);
+    expect(summarizeBundle(preview)).toBe('2곡 · 적용 가능 2 · 원문으로 찾음 2');
+    const report = await applyTranslationBundle(b, preview);
+    expect(report).toMatchObject({ saved: 2, skippedNow: 0, failed: 0 });
+    const mine = (await b.store.listTranslations(studioB.id))[0]!;
+    expect(mine.origin).toBe('user');
+    const targets = translatableLines(studioB);
+    expect(mine.lines[targets[0]!.id]).toBe(`번역1 ${targets[0]!.text.length}`);
+    // 재생하면 AI·LRCLIB 없이 바로 내 번역
+    const httpBefore = b.http.calls.length;
+    await b.session.onTrackChanged(TRACKS.jaStudio);
+    await b.session.idle();
+    expect(b.session.current.translation?.origin).toBe('user');
+    expect(b.http.calls.length).toBe(httpBefore);
+    expect(b.provider.calls).toHaveLength(0);
+
+    // 같은 원문을 가진 곡이 B에 하나 더 생기면(예: 다른 녹음) 어느 곡인지 고르지 않는다(불변조건 6)
+    const twin = await harness({ autoTranslate: false, ids: new PrefixedIds('c') });
+    await downloadLyrics(twin, [TRACKS.jaStudio]);
+    const src = await activeLyrics(twin, TRACKS.jaStudio);
+    await twin.store.createSong({
+      id: 'song-twin',
+      title: '夜明けのホーム (Live)',
+      artist: 'Synthetic Band',
+      album: null,
+      durationMs: 230_000,
+      versionTags: ['live'],
+      isrc: null,
+      activeLyricsVersionId: null,
+      createdAtEpochMs: 1,
+    });
+    await twin.store.saveLyricsVersion(
+      buildLyricsVersion({
+        id: 'lv-twin',
+        songId: 'song-twin',
+        source: 'lrclib',
+        sourceRef: 'twin',
+        kind: 'plain',
+        plain: translatableLines(src).map((l) => l.text),
+        createdAtEpochMs: 2,
+      }),
+      { activate: true },
+    );
+    const studioOnly = filled.split('### 2.')[0]!;
+    const amb = await previewOf(twin, studioOnly);
+    expect(amb.items.map((i) => [i.status, i.matchedBy])).toEqual([['ambiguous-lyrics', null]]);
+    expect(summarizeBundle(amb)).toBe('1곡 · 같은 원문 곡 여러 개 1');
+    expect((await applyTranslationBundle(twin, amb)).saved).toBe(0);
+
+    // 원문이 한 글자라도 다르면 연결하지 않는다(다른 가사 판본에 번역을 붙이지 않음)
+    const changed = filled.replace('夜明けの駅で君を待つ', '夜明けの駅で君を待った');
+    const diff = await previewOf(b, changed);
+    expect(diff.items[0]?.status).toBe('unknown-lyrics');
   });
 });

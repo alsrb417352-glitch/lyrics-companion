@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "가사 보조 — Apple Music 웹",
+  "short_name": "가사 보조",
+  "version": "0.1.0",
+  "description": "Apple Music 웹 플레이어(music.apple.com)에서 재생 중인 곡의 원문·한글 발음·한국어 번역 가사를 사이드 패널에 맞춰 보여 줍니다(개인 사용).",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvJGygB20J1ZycFfSA4BJ7Kkmd1qIcdirJ6OvGzGSFODY9TBlJwyjwDHjEDBkC2YaGr9p8dsiqmZuARd7pwuVs1lJzEtwTfJGfTz2Um30HSLx/36XidrbphfEChG1p4Bvq3/pj+krP6zvIBX+b2FW0C93c9t0N0Uhpg5FW5EoB0aKhJGlIye2Z0bXHJ9VFoDp3uMUIrxkgvpObZo481MZkk38Y1csff+lOwYoR+lyi78EaiHiRlNVCuY3Qa9spgsC4uRVg181pMwY9Ecv7wL4JzvPUtGXX0NEwJSx7YHvDtMrVg3zRbrqOzK8e5PXGfWNTCngZRTS4yXADEKUsG6DtQIDAQAB",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "가사 보조 열기",
+    "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" }
+  },
+  "side_panel": { "default_path": "panel.html" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["sidePanel", "nativeMessaging", "scripting", "unlimitedStorage"],
+  "host_permissions": ["https://music.apple.com/*", "https://lrclib.net/*", "https://itunes.apple.com/*"],
+  "optional_host_permissions": ["https://*/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://music.apple.com/*"],
+      "js": ["page-bridge.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.apple.com/*"],
+      "js": ["relay.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}

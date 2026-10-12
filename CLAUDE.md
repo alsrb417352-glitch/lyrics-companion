@@ -6,6 +6,7 @@
 ## 현재 상태
 Phase 0 완료: `packages/core`(플랫폼 독립 로직) + 검증 하네스.
 Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions iOS 빌드 성공(2026-10-05 #3, 빌드 결과 검사 포함 — Swift 모듈 컴파일 확인). 편집·백업 화면 추가(2026-10-05). 플레이리스트 탭(보관함 플레이리스트 바로 재생)·원문 TXT 내보내기·수동 싱크(탭 기록) 추가(2026-10-05, D-28~30). 플레이리스트 가사 원문 일괄 받기 추가(2026-10-05, D-31). LRCLIB 503 과부하 자동 재시도(2026-10-06, D-33). 아이콘 중심 UI 개편(2026-10-05, D-32, react-native-svg). 플레이리스트 번역 묶음 파일(번역할 곡 원문 한 파일로 내보내기 → 채운 번역 한 번에 가져오기, 2026-10-06, D-34). 번역 묶음에 선택 [발음] 칸(일본어 곡 "내 발음" 일괄 저장, 2026-10-06, D-35). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
+**PC 버전**(2026-10-06 사용자 요청, D-36·D-37): `apps/pc-extension` — Windows Chrome/Edge 확장 프로그램(사이드 패널, music.apple.com 웹 플레이어 연동, 같은 core). API 키는 Windows DPAPI 보안 저장소 도우미(`native-host/`)에만. 설치는 `docs/pc-install.md`. **실제 브라우저 설치·Apple Music 웹 연동 확인 0건**. 이 PC에는 전역 Node가 없어 프로젝트 안 휴대용 Node(`.tmp/node/node-v24.21.0-win-x64`)로 검사한다(PATH 앞에 붙여 실행).
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
 1. 저장된 번역(사용자·AI)이 있으면 재생·재시작·표시 변경·모델/프롬프트/제공자 변경으로 AI를 호출하지 않는다.
@@ -20,7 +21,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 
 ## 작업 절차
 1. 변경 전: 관련 문서(위 링크)와 `docs/requirements.json`의 해당 REQ를 읽는다.
-2. 작은 단위로 구현한다. 판단 로직은 `packages/core/src`에, OS·UI 의존 코드는 `apps/mobile`에 둔다(core에서 Node/RN/`fetch`/`Date`/`console` 직접 사용 금지 — ESLint가 막음).
+2. 작은 단위로 구현한다. 판단 로직은 `packages/core/src`에, OS·UI 의존 코드는 `apps/mobile`(iPhone)·`apps/pc-extension`(PC)에 둔다(core에서 Node/RN/`fetch`/`Date`/`console` 직접 사용 금지 — ESLint가 막음).
 3. 테스트를 함께 쓴다: 제목에 `[REQ-..]`/`[AT-..]` 태그, 가짜 제공자·`FakeClock`·`FakeHttp` 사용, 실제 네트워크·유료 호출 금지. 새 불변조건은 `scripts/mutation-smoke.mjs`에 뮤턴트 추가.
 4. `npm run check` 통과 → `docs/requirements.json` 상태 갱신 → `npm run trace:update` → 결정·남은 작업은 `docs/plan.md`에 기록.
 5. 독립 조사·검토는 병렬로 해도 되지만 같은 파일을 동시에 고치지 않는다.
@@ -30,7 +31,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 38개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 42개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

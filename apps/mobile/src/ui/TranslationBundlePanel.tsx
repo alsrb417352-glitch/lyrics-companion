@@ -23,7 +23,7 @@ import type { Theme } from './theme';
 function itemLabel(it: BundleItem): string {
   switch (it.status) {
     case 'ready':
-      return it.replacesAi ? `저장 · ${it.translatedLines}줄 (AI 번역 대신 표시)` : `저장 · ${it.translatedLines}줄`;
+      return `저장 · ${it.translatedLines}줄${it.replacesAi ? ' (AI 번역 대신 표시)' : ''}${it.matchedBy === 'original-text' ? ' · 원문으로 찾음' : ''}`;
     case 'empty':
       return '번역이 비어 있음 — 건너뜀';
     case 'has-user-translation':
@@ -35,7 +35,9 @@ function itemLabel(it: BundleItem): string {
     case 'invalid':
       return '깨진 글자나 너무 긴 줄이 있음 — 건너뜀';
     case 'unknown-lyrics':
-      return '이 기기에 없는 곡 — 건너뜀';
+      return '이 기기에 이 원문 가사가 없음 — 건너뜀';
+    case 'ambiguous-lyrics':
+      return '원문이 똑같은 곡이 여러 개라 고르지 않음 — 그 곡을 재생해 "번역 직접 입력"으로 넣어 주세요';
     case 'lyrics-changed':
       return '내보낸 뒤 가사가 바뀜 — 다시 내보내 주세요';
     case 'duplicate':
@@ -268,6 +270,13 @@ export function TranslationBundlePanel(props: {
         <View style={[styles.sheet, { backgroundColor: theme.bg }]}>
           <Text style={[styles.sheetTitle, { color: theme.text }]}>번역 가져오기 확인</Text>
           {preview ? <Note theme={theme}>{summarizeBundle(preview)}</Note> : null}
+          {preview && preview.counts['unknown-lyrics'] > 0 ? (
+            <Note theme={theme} tone="danger">
+              이 기기에 가사 원문이 없는 곡이 {preview.counts['unknown-lyrics']}곡 있습니다. 다른 기기(PC)에서 만든
+              파일이면 설정 › 백업 가져오기로 그 기기의 백업을 먼저 가져오거나, 플레이리스트의 &quot;가사 원문 일괄
+              받기&quot; 뒤에 다시 가져오세요. 원문이 파일과 글자 그대로 같은 곡은 자동으로 찾아 연결합니다.
+            </Note>
+          ) : null}
           <Note theme={theme}>
             &quot;저장&quot;을 누르면 아래 저장 표시된 곡마다 새 &quot;내 번역&quot;이 추가되어 AI 번역보다 먼저
             보입니다{pronReady > 0 ? ` (발음 ${pronReady}곡 포함)` : ''}. 기존 번역·발음은 지워지지 않습니다. 건너뛴

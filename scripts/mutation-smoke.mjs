@@ -317,6 +317,38 @@ const MUTANTS = [
     replace:
       "if (Math.random() > 2) {\n    return { pronunciationStatus: 'has-user-pronunciation', pronunciationLines: null };",
   },
+  {
+    id: 'M39',
+    req: 'REQ-PC-01',
+    desc: 'PC 웹 플레이어 미리듣기(30초 구간)에서도 위치를 곡 위치로 사용(진행을 꾸며냄, 불변조건 5)',
+    file: S('playback/musickit-web.ts'),
+    find: 'if (raw.previewOnly === true) return null;',
+    replace: '// mutated',
+  },
+  {
+    id: 'M40',
+    req: 'REQ-PC-01',
+    desc: 'PC 웹 플레이어 <audio> 위치가 MusicKit 위치와 크게 달라도(다른 미디어) 그대로 사용',
+    file: S('playback/musickit-web.ts'),
+    find: 'Math.abs(el - mk) <= ELEMENT_TIME_TOLERANCE_SEC',
+    replace: 'Math.abs(el - mk) >= 0',
+  },
+  {
+    id: 'M41',
+    req: 'REQ-PC-01',
+    desc: '다른 탭 측정 시각이 받은 시각보다 미래여도 그대로 사용(위치를 앞서 추정)',
+    file: S('playback/musickit-web.ts'),
+    find: 'if (!(age >= 0 && age <= maxAge)) return input.receivedAtMonotonicMs;',
+    replace: 'if (!(age <= maxAge)) return input.receivedAtMonotonicMs;',
+  },
+  {
+    id: 'M42',
+    req: 'REQ-LY-03',
+    desc: '다른 기기 번역 묶음: [원문]이 같은 곡이 여럿이어도 첫 곡에 번역을 붙임(곡을 추측, 불변조건 6)',
+    file: S('batch/translation-bundle.ts'),
+    find: "if (found.length > 1) return { ...base, status: 'ambiguous-lyrics' };",
+    replace: '// mutated',
+  },
 ];
 
 const vitest = binPath('vitest');

@@ -83,3 +83,15 @@
 - 서명: 사용자 PC의 Sideloadly가 무료 Apple ID로 서명한다. Sideloadly는 Apple 공식 도구가 아니므로 **서명 전용 Apple ID**(음악 구독·결제용 주 계정과 분리)를 권장한다(docs/ios-install.md §6).
 - Keychain: API 키는 `WHEN_UNLOCKED_THIS_DEVICE_ONLY`로 저장한다(앱 `src/adapters/secure-store.ts`). 재서명·재설치 후 유지 여부는 MV-IOS-INSTALL-01에서 확인한다.
 - 권한: iOS는 `NSAppleMusicUsageDescription` 하나만 요청한다. Music 앱의 현재 곡 정보만 읽으며 서버로 보내지 않는다. 곡 검색어와 재생 중인 곡의 스토어 ID는 iTunes Search/Lookup(Apple)에, 곡 제목·가수·길이는 LRCLIB에 전송된다(가사 조회 목적).
+
+## §12 PC 확장 프로그램(Windows Chrome/Edge) — 2026-10-06 추가(D-36·D-37)
+| 대상 | 대응 |
+|---|---|
+| **API 키**(REQ-PC-02, 불변조건 8) | 확장 프로그램에는 OS 보안 저장소가 없으므로 **네이티브 메시징 도우미**(`apps/pc-extension/native-host/secret-host.ps1`)가 **Windows DPAPI**(`ProtectedData`, CurrentUser 범위 + 앱 고유 엔트로피)로 암호화해 `%LOCALAPPDATA%\LyricsCompanion\secrets\<슬롯>.bin`에 보관한다(임시 파일 쓰기 후 바꿔치기). 확장 프로그램 IndexedDB·설정·로그·백업에는 키가 없다. 키는 요청 직전에만 도우미에서 읽어 메모리에만 둔다(core `ApiKeyManager.getForRequest`). |
+| 도우미 호출 제한 | 호스트 매니페스트 `allowed_origins`에 이 확장 프로그램 ID(매니페스트 `key`로 고정)만 넣고, 도우미가 브라우저가 넘긴 호출자 주소를 다시 확인한다. 슬롯 이름은 `^[a-z0-9][a-z0-9._-]{0,127}$`만(경로 조작 방지), 요청 64KB·값 4096자 상한. 오류 응답에는 코드만(경로·값 없음). 자동 시험: `scripts/test/secret-host.test.mjs`(Windows, 저장 폴더를 `.tmp/`로 바꿔 실행). |
+| 남는 경계 | DPAPI CurrentUser는 **같은 Windows 사용자로 실행되는 다른 프로그램**도 풀 수 있다(iOS Keychain의 앱 격리보다 약함, Windows 자격 증명 관리자와 같은 수준). 다른 사용자·다른 PC·디스크만 떼어 간 경우에는 풀 수 없다. |
+| 설치 범위 | `install.ps1`은 현재 사용자 레지스트리(HKCU `…\Google\Chrome\NativeMessagingHosts`, `…\Microsoft\Edge\NativeMessagingHosts`)와 `%LOCALAPPDATA%\LyricsCompanion\native-host`만 바꾼다. 관리자 권한·전역 설정 변경 없음. `uninstall.ps1`로 되돌린다(키는 `-RemoveKeys`일 때만 삭제). PowerShell 실행 정책은 도우미 프로세스에만 `-ExecutionPolicy Bypass`로 적용(시스템 정책 변경 없음). |
+| 확장 프로그램 권한(최소) | `sidePanel`, `nativeMessaging`, `scripting`(설치 전에 열린 Apple Music 탭에 스크립트 넣기), `unlimitedStorage`(번역 데이터가 저장 공간 정리로 지워지지 않게). 호스트: `music.apple.com`, `lrclib.net`, `itunes.apple.com`만 기본. AI 제공자 주소는 `optional_host_permissions`로 **설정 저장 때 사용자가 허용한 주소만**(허용 안 하면 제공자 없음으로 요청이 나가지 않음). `tabs`·`downloads`·`storage`·`cookies` 권한 없음. CSP는 기본 + `wasm-unsafe-eval`(SQLite WASM). |
+| Apple Music 페이지와의 경계 | 페이지 스크립트(MAIN world)는 지금 재생·대기열 값과 오디오 위치만 읽고 패널이 보낸 재생 명령(재생·일시정지·탐색·이전/다음·대기열 위치)만 실행한다. 계정 정보·토큰·쿠키를 읽지 않고 Apple API를 따로 부르지 않는다. 패널은 페이지로 키·가사·번역 등 아무 데이터도 보내지 않는다. 페이지 쪽 메시지는 다른 스크립트도 만들 수 있으므로 패널이 core(`mapMusicKitSnapshot`·`mapMusicKitQueue`)로 형식·길이·숫자 범위를 검증한다(대기열 1000곡 상한). |
+| 로컬 저장 | 가사·번역 DB는 확장 프로그램 출처의 IndexedDB(다른 사이트 접근 불가). 확장 프로그램을 제거하면 브라우저가 지운다 → 사용자에게 백업을 안내(docs/pc-install.md). 사이드 패널·따로 띄운 창 동시 열기는 Web Locks로 막는다(덮어쓰기 방지). |
+| 파일 | 내보내기는 다운로드 폴더(브라우저 기본 다운로드), 가져오기는 파일 선택 창으로 사용자가 고른 파일만 크기 확인 후 읽는다(core가 내용 검증). |

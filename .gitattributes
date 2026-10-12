@@ -3,3 +3,5 @@
 *.png binary
 *.jpg binary
 *.sqlite binary
+# 배치 파일은 CRLF(cmd.exe 호환)
+*.cmd text eol=crlf

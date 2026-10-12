@@ -15,11 +15,12 @@ export default tseslint.config(
       'apps/mobile/.expo/**',
       'apps/mobile/ios/**',
       'apps/mobile/android/**',
+      'apps/pc-extension/dist/**',
     ],
   },
   js.configs.recommended,
   {
-    files: ['scripts/**/*.mjs', '*.mjs'],
+    files: ['scripts/**/*.mjs', '*.mjs', 'apps/pc-extension/*.mjs'],
     languageOptions: { globals: { ...globals.node } },
   },
   {

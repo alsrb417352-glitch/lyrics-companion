@@ -1,0 +1,27 @@
+{
+  "name": "lyrics-companion-pc-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "번역 가사 보조 앱 — Windows PC용 Chrome/Edge 확장 프로그램(Apple Music 웹 플레이어)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:demo": "node build.mjs --demo",
+    "typecheck": "tsc --noEmit",
+    "demo": "node build.mjs --demo --serve"
+  },
+  "dependencies": {
+    "@lyrics-companion/core": "file:../../packages/core",
+    "react": "~19.2.3",
+    "react-dom": "~19.2.3",
+    "sql.js": "~1.14.2"
+  },
+  "devDependencies": {
+    "@types/chrome": "~0.3.4",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
+    "@types/sql.js": "~1.4.11",
+    "esbuild": "~0.28.2",
+    "typescript": "~6.0.3"
+  }
+}

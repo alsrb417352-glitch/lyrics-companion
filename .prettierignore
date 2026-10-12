@@ -13,5 +13,8 @@ apps/mobile/.tmp/
 apps/mobile/.expo/
 apps/mobile/ios/
 apps/mobile/android/
+apps/pc-extension/dist/
+*.ps1
+*.cmd
 *.swift
 *.podspec

@@ -636,6 +636,39 @@
       "manual": ["MV-SEC-01", "MV-ST-02"]
     },
     {
+      "id": "REQ-PC-01",
+      "title": "PC(Windows Chrome/Edge) Apple Music 웹 플레이어에서 현재 곡·재생 위치 자동 감지와 iPhone 앱과 같은 가사 기능(사이드 패널 확장 프로그램)",
+      "core": "partial",
+      "app": "partial",
+      "design": "docs/architecture.md §14, docs/platform-support.md §2.8",
+      "implementation": [
+        "packages/core/src/playback/musickit-web.ts",
+        "apps/pc-extension/src/content/page-bridge.ts",
+        "apps/pc-extension/src/content/relay.ts",
+        "apps/pc-extension/src/adapters/web-playback.ts",
+        "apps/pc-extension/src/adapters/sqljs-driver.ts",
+        "apps/pc-extension/src/services.ts",
+        "apps/pc-extension/src/ui/App.tsx",
+        "apps/pc-extension/static/manifest.json",
+        "docs/pc-install.md"
+      ],
+      "manual": ["MV-PC-01", "MV-PC-03"]
+    },
+    {
+      "id": "REQ-PC-02",
+      "title": "PC의 AI API 키는 Windows 보안 저장소(DPAPI 네이티브 메시징 도우미)에만 저장",
+      "core": "n/a",
+      "app": "partial",
+      "design": "docs/security.md §12",
+      "implementation": [
+        "apps/pc-extension/native-host/secret-host.ps1",
+        "apps/pc-extension/native-host/install.ps1",
+        "apps/pc-extension/native-host/uninstall.ps1",
+        "apps/pc-extension/src/adapters/native-secret-store.ts"
+      ],
+      "manual": ["MV-PC-02"]
+    },
+    {
       "id": "REQ-LEGAL-01",
       "title": "가사 조회·번역·저장·표시와 스트리밍 연동의 약관·권리 조건 확인(배포 권한 별도)",
       "core": "n/a",
@@ -725,6 +758,10 @@
     {
       "id": "AT-20",
       "title": "플레이리스트 번역 묶음: 내 번역 없는 곡만 내보내기, 채운 파일을 가져오면 여러 곡 한 번에 내 번역 저장·재생 시 AI 호출 0회, 이미 내 번역 있는 곡(미리보기 뒤 생긴 경우 포함) 건너뜀, 줄 수 불일치·빈 칸·원문 그대로·없는/바뀐 판본·중복 저장 안 함, 바깥 AI를 거친 형태 파싱, 지시문 불이행"
+    },
+    {
+      "id": "AT-21",
+      "title": "PC Apple Music 웹 플레이어: MusicKit 원시 값으로 현재 행 계산(오디오 요소 위치), 미리듣기·불러오는 중이면 진행을 꾸며내지 않음, iPhone에서 저장한 내 번역을 백업으로 옮기면 같은 스토어 ID로 연결되어 가사·AI 호출 0회"
     }
   ]
 }
