@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   BACKUP_LIMITS,
   backupFileName,
+  checkModelName,
   LATEST_SCHEMA_VERSION,
   parseBackup,
   PROVIDER_PRESETS,
+  suggestModelIds,
   validateProviderConfig,
   type BackupSummary,
   type ImportReport,
@@ -24,6 +26,9 @@ const EFFORT_CHOICES: Array<{ value: ReasoningEffort | null; label: string }> = 
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
 ];
+
+/** 비슷한 이름이 없을 때 보여 줄 최신 모델 수 */
+const RECENT_MODEL_COUNT = 24;
 
 function utcDay(epochMs: number): string {
   return new Date(epochMs).toISOString().slice(0, 10);
@@ -171,6 +176,18 @@ export function Settings(props: { services: AppServices }) {
   const [auto, setAuto] = useState(false);
   const [usage, setUsage] = useState<{ requests: number; sourceChars: number } | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
+  // 모델 목록(D-39): 이 키로 쓸 수 있는 모델 ID. null = 아직 불러오지 않음
+  const [models, setModels] = useState<string[] | null>(null);
+  const [modelsMsg, setModelsMsg] = useState<Msg>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const modelCheck = checkModelName(model, baseUrl);
+  const modelSuggestions = models ? suggestModelIds(model, models) : [];
+  const modelChoices = models
+    ? modelSuggestions.length > 0
+      ? modelSuggestions
+      : models.slice(0, RECENT_MODEL_COUNT)
+    : [];
+  const modelListed = models !== null && model.trim() !== '' && models.includes(model.trim());
   const globalOffset = useSessionState(services.session).globalOffsetMs;
   const fmt = (ms: number) => `${ms > 0 ? '+' : ''}${(ms / 1000).toFixed(2)}초`;
 
@@ -212,14 +229,57 @@ export function Settings(props: { services: AppServices }) {
     setAllowed(ok);
     await store.setProviderConfig(r.config);
     setKeyHint(host === 'ok' ? await keys.hint(r.config.providerId) : null);
+    // 저장은 막지 않되(목록을 못 받는 호환 서버도 있음), 틀렸을 가능성이 보이면 함께 알린다.
+    const warn =
+      models !== null && !models.includes(r.config.model)
+        ? ` 단, "${r.config.model}"은(는) 불러온 모델 목록에 없어 번역이 실패할 수 있습니다.`
+        : modelCheck.warning
+          ? ` 단, ${modelCheck.warning}`
+          : '';
     setMsg(
       ok
-        ? { text: '제공자 설정을 저장했습니다. 저장된 번역은 그대로 유지됩니다.' }
+        ? { text: `제공자 설정을 저장했습니다. 저장된 번역은 그대로 유지됩니다.${warn}`, danger: warn !== '' }
         : {
             text: `설정은 저장했지만 ${origin ?? '그 주소'} 접근을 허용하지 않아 번역 요청을 보내지 않습니다.`,
             danger: true,
           },
     );
+  };
+
+  const loadModels = async () => {
+    // 모델 칸이 비어 있어도 목록은 불러올 수 있게 임시 이름으로 주소·ID만 검사한다.
+    const r = validateProviderConfig({ providerId, baseUrl, model: model.trim() || 'x', structuredOutput: true });
+    if (!r.ok) {
+      setModelsMsg({ text: r.error, danger: true });
+      return;
+    }
+    const origin = originOf(r.config.baseUrl);
+    // 접근 허용 요청은 클릭 직후(다른 await 전)에 해야 브라우저가 창을 띄운다.
+    const ok = origin ? await services.permissions.request(origin) : false;
+    setAllowed(ok);
+    if (!ok) {
+      setModelsMsg({ text: `${origin ?? '그 주소'} 접근을 허용해야 모델 목록을 불러올 수 있습니다.`, danger: true });
+      return;
+    }
+    setLoadingModels(true);
+    setModelsMsg({ text: '모델 목록을 불러오는 중…' });
+    try {
+      const res = await services.listProviderModels(r.config.providerId, r.config.baseUrl);
+      if (res.ok) {
+        setModels(res.models);
+        setModelsMsg({
+          text: `이 키로 쓸 수 있는 모델 ${res.models.length}개를 불러왔습니다. 아래에서 눌러 고른 뒤 "제공자 설정 저장"을 누르세요.`,
+        });
+      } else {
+        setModels(null);
+        setModelsMsg({
+          text: res.kind === 'no-key' ? '먼저 아래 "API 키" 칸에 키를 저장해 주세요.' : res.message,
+          danger: true,
+        });
+      }
+    } finally {
+      setLoadingModels(false);
+    }
   };
 
   const saveKey = async () => {
@@ -305,9 +365,55 @@ export function Settings(props: { services: AppServices }) {
             <input className="input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} spellCheck={false} />
           </label>
           <label className="field">
-            <span>모델 이름</span>
-            <input className="input" value={model} onChange={(e) => setModel(e.target.value)} spellCheck={false} />
+            <span>모델 이름(API용 ID)</span>
+            <input
+              className="input"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="예: gpt-6-luna"
+              autoCapitalize="none"
+              spellCheck={false}
+            />
           </label>
+          {modelCheck.warning ? <Note tone="danger">{modelCheck.warning}</Note> : null}
+          {modelCheck.suggestion ? (
+            <div className="row wrap">
+              <Chip
+                label={`${modelCheck.suggestion}(으)로 고치기`}
+                on={false}
+                onClick={() => setModel(modelCheck.suggestion ?? model)}
+              />
+            </div>
+          ) : null}
+          <div className="row">
+            <Button
+              label={loadingModels ? '불러오는 중…' : '모델 목록 불러오기'}
+              onClick={() => void loadModels()}
+              disabled={loadingModels}
+            />
+          </div>
+          {modelsMsg ? <Note tone={modelsMsg.danger ? 'danger' : 'dim'}>{modelsMsg.text}</Note> : null}
+          {models !== null && model.trim() !== '' ? (
+            <Note tone={modelListed ? 'dim' : 'danger'}>
+              {modelListed
+                ? `"${model.trim()}"은(는) 이 키로 쓸 수 있는 모델입니다.`
+                : `"${model.trim()}"은(는) 목록에 없습니다. 아래에서 고르세요.`}
+            </Note>
+          ) : null}
+          {modelChoices.length > 0 ? (
+            <div className="field">
+              <span>
+                {modelSuggestions.length > 0
+                  ? '입력한 이름과 비슷한 모델'
+                  : '최신 모델(입력한 이름과 비슷한 모델 없음)'}
+              </span>
+              <div className="row wrap">
+                {modelChoices.map((id) => (
+                  <Chip key={id} label={id} on={model.trim() === id} onClick={() => setModel(id)} />
+                ))}
+              </div>
+            </div>
+          ) : null}
           <label className="check">
             <input type="checkbox" checked={structured} onChange={(e) => setStructured(e.target.checked)} />
             구조화 출력(json_schema) 사용

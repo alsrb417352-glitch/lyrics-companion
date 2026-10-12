@@ -3,6 +3,7 @@ import type { ApiKeyManager } from '../security/api-keys.js';
 import type { Logger } from '../security/logger.js';
 import { redactText, type SecretRegistry } from '../security/redact.js';
 import type { ReasoningEffort } from './provider-config.js';
+import { describeProviderHttpError } from './provider-models.js';
 import {
   ProviderError,
   type TranslationProvider,
@@ -125,16 +126,17 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): T
         throw new ProviderError('unknown', 'transport error', 'possible');
       }
       const known = opts.secrets.known();
-      const snippet = redactText(res.bodyText.slice(0, 300), known);
-      if (res.status === 401 || res.status === 403)
-        throw new ProviderError('auth', `HTTP ${res.status}: ${snippet}`, 'none');
+      // 4xx 본문(JSON)을 그대로 보이지 않고 원인별 안내로 바꾼다(D-39: model_not_found 등). 키가 섞일 수 있으므로 마스킹.
+      const { status, bodyText } = res;
+      const describe = () =>
+        redactText(describeProviderHttpError(status, bodyText, { model: opts.model, baseUrl: base }), known);
+      if (res.status === 401 || res.status === 403) throw new ProviderError('auth', describe(), 'none');
       if (res.status === 429) {
         const ra = Number(res.headers['retry-after']);
         throw new ProviderError('rate_limited', `HTTP 429`, 'none', Number.isFinite(ra) ? ra * 1000 : undefined);
       }
       if (res.status === 503) throw new ProviderError('overloaded', 'HTTP 503', 'none');
-      if (res.status >= 400 && res.status < 500)
-        throw new ProviderError('bad_request', `HTTP ${res.status}: ${snippet}`, 'none');
+      if (res.status >= 400 && res.status < 500) throw new ProviderError('bad_request', describe(), 'none');
       if (res.status >= 500) throw new ProviderError('server', `HTTP ${res.status}`, 'possible');
 
       let parsed: unknown;

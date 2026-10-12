@@ -5,11 +5,13 @@ import {
   ItunesCatalogClient,
   LrclibClient,
   Logger,
+  listProviderModels,
   LyricsStore,
   NowPlayingSession,
   PlaylistLyricsBatch,
   SecretRegistry,
   TranslationService,
+  type ProviderModelListResult,
   type TranslationProvider,
   type TranslationProviderRegistry,
 } from '@lyrics-companion/core';
@@ -47,6 +49,11 @@ export interface AppServices {
   /** 플레이리스트 가사 원문 일괄 받기(D-31). 화면을 옮겨도 계속되도록 앱 전체에서 하나만 둔다. */
   playlistBatch: PlaylistLyricsBatch;
   logs: RingLogSink;
+  /**
+   * 이 키로 쓸 수 있는 AI 모델 ID 목록(D-39). 설정 화면의 "모델 목록 불러오기"용.
+   * GET {baseUrl}/models — 번역 요청이 아니므로 가사를 보내지 않고 과금도 없다. 키는 보안 저장소에서 읽어 헤더에만 넣는다.
+   */
+  listProviderModels(providerId: string, baseUrl: string): Promise<ProviderModelListResult>;
 }
 
 class ConfiguredProviderRegistry implements TranslationProviderRegistry {
@@ -121,5 +128,20 @@ export async function createAppServices(): Promise<AppServices> {
     if (awake) void activateKeepAwakeAsync('playlist-batch').catch(() => undefined);
     else void deactivateKeepAwake('playlist-batch').catch(() => undefined);
   });
-  return { clock, ids, logger, store, keys, translation, session, lrclib, catalog, playback, playlistBatch, logs };
+  return {
+    clock,
+    ids,
+    logger,
+    store,
+    keys,
+    translation,
+    session,
+    lrclib,
+    catalog,
+    playback,
+    playlistBatch,
+    logs,
+    listProviderModels: (providerId, baseUrl) =>
+      listProviderModels({ providerId, baseUrl, http, keys, secrets, logger }),
+  };
 }

@@ -6,6 +6,7 @@ import {
   getSchemaVersion,
   ItunesCatalogClient,
   LATEST_SCHEMA_VERSION,
+  listProviderModels,
   LrclibClient,
   Logger,
   LyricsStore,
@@ -15,6 +16,7 @@ import {
   TranslationService,
   type HttpClient,
   type LyricsProvider,
+  type ProviderModelListResult,
   type SecretStore,
   type TranslationProvider,
   type TranslationProviderRegistry,
@@ -74,6 +76,11 @@ export interface AppServices {
   secretStatus: () => Promise<SecretHostStatus>;
   /** 마이그레이션 전에 만든 사본이 있으면 그 스키마 버전 */
   migratedFrom: number | null;
+  /**
+   * 이 키로 쓸 수 있는 AI 모델 ID 목록(D-39, iPhone과 같은 core 함수). GET {baseUrl}/models —
+   * 번역 요청이 아니므로 가사를 보내지 않고 과금도 없다. 호출 전에 그 주소 접근 허용이 필요하다.
+   */
+  listProviderModels(providerId: string, baseUrl: string): Promise<ProviderModelListResult>;
 }
 
 /** 제공자 주소 → 권한 이름(origin) */
@@ -181,5 +188,7 @@ export async function createAppServices(deps: PlatformDeps): Promise<AppServices
     permissions: deps.permissions,
     secretStatus: deps.secretStatus,
     migratedFrom,
+    listProviderModels: (providerId, baseUrl) =>
+      listProviderModels({ providerId, baseUrl, http: deps.http, keys, secrets, logger }),
   };
 }

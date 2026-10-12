@@ -349,6 +349,22 @@ const MUTANTS = [
     find: "if (found.length > 1) return { ...base, status: 'ambiguous-lyrics' };",
     replace: '// mutated',
   },
+  {
+    id: 'M43',
+    req: 'REQ-SEC-01',
+    desc: '모델 목록 조회 오류 문구를 마스킹하지 않음(제공자 오류에 섞인 키가 화면·로그로 샐 수 있음)',
+    file: S('translation/provider-models.ts'),
+    find: "const detail = redactText(info?.message ?? '', known());",
+    replace: "const detail = info?.message ?? '';",
+  },
+  {
+    id: 'M44',
+    req: 'REQ-TR-01',
+    desc: '없는 모델(404 model_not_found)을 일반 오류로 처리(모델 이름·해결 방법 안내 없음, D-39)',
+    file: S('translation/provider-models.ts'),
+    find: 'if (isModelNotFound(status, info)) {',
+    replace: 'if (isModelNotFound(status, info) && Math.random() > 2) {',
+  },
 ];
 
 const vitest = binPath('vitest');

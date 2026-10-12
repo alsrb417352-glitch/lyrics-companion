@@ -303,7 +303,9 @@
         "packages/core/src/translation/openai-compatible-provider.ts",
         "packages/core/src/security/api-keys.ts",
         "packages/core/src/translation/provider-config.ts",
-        "apps/mobile/src/ui/SettingsScreen.tsx"
+        "apps/mobile/src/ui/SettingsScreen.tsx",
+        "packages/core/src/translation/provider-models.ts",
+        "apps/pc-extension/src/ui/Settings.tsx"
       ],
       "manual": ["MV-AI-01"]
     },

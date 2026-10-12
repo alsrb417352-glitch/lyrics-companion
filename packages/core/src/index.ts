@@ -20,6 +20,7 @@ export * from './translation/selection.js';
 export * from './translation/translation-service.js';
 export * from './translation/openai-compatible-provider.js';
 export * from './translation/provider-config.js';
+export * from './translation/provider-models.js';
 export * from './storage/sql-driver.js';
 export * from './storage/migrations.js';
 export * from './storage/lyrics-store.js';
