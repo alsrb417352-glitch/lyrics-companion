@@ -365,6 +365,30 @@ const MUTANTS = [
     find: 'if (isModelNotFound(status, info)) {',
     replace: 'if (isModelNotFound(status, info) && Math.random() > 2) {',
   },
+  {
+    id: 'M45',
+    req: 'REQ-SY-01',
+    desc: '직접 등록 가사: 시간 없는 줄이 섞인 LRC를 그대로 싱크 가사로 저장(틀린 시간을 받아들임, 불변조건 5, D-40)',
+    file: S('lyrics/user-lyrics.ts'),
+    find: 'if (!parsed.ok) {',
+    replace: 'if (!parsed.ok && parsed.lines.length === 0) {',
+  },
+  {
+    id: 'M46',
+    req: 'REQ-LY-04',
+    desc: '직접 등록 가사: 같은 내용을 다시 등록해도 새 판본을 만듦(붙어 있던 내 번역이 화면에서 사라짐, D-40)',
+    file: S('session/now-playing-session.ts'),
+    find: 'if (this.state.lyrics && this.state.lyrics.contentHash === v.contentHash) return { ok: true, unchanged: true };',
+    replace: '// mutated',
+  },
+  {
+    id: 'M47',
+    req: 'REQ-SEC-07',
+    desc: '직접 등록 가사: 행 길이 한도 검사 제거(백업 파일로 옮길 수 없는 가사가 저장됨, D-40)',
+    file: S('lyrics/user-lyrics.ts'),
+    find: "if (long >= 0) return { code: 'LINE_TOO_LONG', lineNumber: long + 1 };",
+    replace: '// mutated',
+  },
 ];
 
 const vitest = binPath('vitest');

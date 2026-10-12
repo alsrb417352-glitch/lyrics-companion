@@ -90,7 +90,7 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
   const control = services.playback.control;
   const s: SessionState = useSessionState(session);
   const [tick, setTick] = useState('');
-  const [picking, setPicking] = useState(false);
+  const [picking, setPicking] = useState<false | 'search' | 'manual'>(false);
   const [editing, setEditing] = useState<EditMode | null>(null);
   const [recording, setRecording] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -183,6 +183,8 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
         initialQuery={s.song.title}
         durationMs={s.song.durationMs}
         candidates={s.lyricsCandidates}
+        hasCurrentLyrics={s.lyrics !== null}
+        startManual={picking === 'manual'}
         onDone={() => setPicking(false)}
       />
     );
@@ -282,8 +284,9 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
             kind="primary"
             icon="search"
             label={s.lyricsCandidates.length > 0 ? '후보 보고 고르기' : '가사 직접 찾기'}
-            onClick={() => setPicking(true)}
+            onClick={() => setPicking('search')}
           />
+          <Button icon="edit" label="가사 직접 등록 (파일·붙여넣기)" onClick={() => setPicking('manual')} />
         </div>
       ) : view ? (
         <LyricsList
@@ -369,7 +372,7 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
             </div>
             {moreOpen ? (
               <div className="tool-grid">
-                <ToolTile icon="swap" label="가사 바꾸기" onClick={() => setPicking(true)} />
+                <ToolTile icon="swap" label="가사 바꾸기" onClick={() => setPicking('search')} />
                 {s.lyrics && s.lyrics.kind !== 'instrumental' && s.translationStatus !== 'pending' ? (
                   <ToolTile
                     icon="edit"

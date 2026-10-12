@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { parseLrc, type LrclibRecord } from '@lyrics-companion/core';
 import type { AppServices } from '../services';
 import { Button, Note } from './common';
+import { ManualLyricsEntry } from './ManualLyricsEntry';
 
 function mmssSec(sec: number): string {
   const s = Math.round(sec);
@@ -21,15 +22,21 @@ function firstLine(r: LrclibRecord): string {
  * 가사 고르기: 자동 조회가 확정하지 못한 후보 + LRCLIB 직접 검색(iPhone 앱 LyricsPicker와 같은 규칙).
  * 사용자가 고른 레코드만 현재 곡에 적용한다(같은 녹음인지 사용자가 확인, 불변조건 6).
  * 길이가 2초 넘게 다르면 다른 녹음일 수 있어 경고한다.
+ * 검색으로도 못 찾으면 "가사 직접 등록"(TXT/LRC 파일·붙여넣기, D-40)으로 넘어간다.
  */
 export function LyricsPicker(props: {
   services: AppServices;
   initialQuery: string;
   durationMs: number | null;
   candidates: LrclibRecord[];
+  /** 지금 표시 중인 가사가 있는지(직접 등록 화면 안내용) */
+  hasCurrentLyrics: boolean;
+  /** 처음부터 직접 등록 화면으로 열기 */
+  startManual?: boolean;
   onDone: () => void;
 }) {
   const { services } = props;
+  const [manual, setManual] = useState(props.startManual ?? false);
   const [term, setTerm] = useState(props.initialQuery);
   const [rows, setRows] = useState<LrclibRecord[]>(props.candidates);
   const [busy, setBusy] = useState(false);
@@ -46,7 +53,10 @@ export function LyricsPicker(props: {
     setBusy(false);
     if (r.status === 'ok') {
       setRows(r.records);
-      if (r.records.length === 0) setMsg('찾지 못했습니다. 제목만, 또는 일본어 원제로 검색해 보세요.');
+      if (r.records.length === 0)
+        setMsg(
+          '찾지 못했습니다. 제목만, 또는 일본어 원제로 검색해 보세요. 그래도 없으면 "가사 직접 등록"으로 넣을 수 있습니다.',
+        );
     } else if (r.status === 'rate_limited') setMsg('가사 서버 요청 한도에 걸렸습니다. 잠시 후 다시 시도해 주세요.');
     else setMsg(r.kind === 'offline' ? '오프라인입니다.' : '가사 검색에 실패했습니다.');
   };
@@ -56,6 +66,18 @@ export function LyricsPicker(props: {
     if (res.ok) props.onDone();
     else setMsg(res.error ?? '적용하지 못했습니다');
   };
+
+  if (manual) {
+    return (
+      <ManualLyricsEntry
+        services={services}
+        durationMs={props.durationMs}
+        hasCurrentLyrics={props.hasCurrentLyrics}
+        onBack={() => (props.startManual ? props.onDone() : setManual(false))}
+        onSaved={props.onDone}
+      />
+    );
+  }
 
   return (
     <div className="screen">
@@ -80,6 +102,9 @@ export function LyricsPicker(props: {
           <Button label="닫기" onClick={props.onDone} />
         </form>
         {msg ? <Note>{msg}</Note> : null}
+        <div className="row">
+          <Button icon="edit" label="가사 직접 등록 (파일·붙여넣기)" onClick={() => setManual(true)} />
+        </div>
       </div>
       <div className="screen-body list">
         {rows.map((item) => {

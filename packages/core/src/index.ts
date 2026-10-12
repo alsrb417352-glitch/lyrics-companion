@@ -5,6 +5,7 @@ export * from './util/text.js';
 export * from './lyrics/lrc.js';
 export * from './lyrics/lyrics-version.js';
 export * from './lyrics/plain-text-export.js';
+export * from './lyrics/user-lyrics.js';
 export * from './lyrics/lrclib-client.js';
 export * from './lyrics/lyrics-provider.js';
 export * from './lyrics/apple-music-lyrics-provider.js';

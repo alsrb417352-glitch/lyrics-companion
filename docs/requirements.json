@@ -169,6 +169,22 @@
       "manual": ["MV-LY-01"]
     },
     {
+      "id": "REQ-LY-06",
+      "title": "가사 직접 등록: LRCLIB에서 못 찾은 곡에 TXT/LRC 파일 또는 붙여넣기로 원문 가사 저장(시간 표시가 있으면 싱크·틀린 LRC는 저장 안 함·시간을 꾸며내지 않음, 미리보기 후 저장, 기존 판본·번역 보존, 같은 내용이면 새 판본 없음, D-40)",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-40",
+      "implementation": [
+        "packages/core/src/lyrics/user-lyrics.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "apps/mobile/src/ui/ManualLyricsEntry.tsx",
+        "apps/mobile/src/ui/LyricsPicker.tsx",
+        "apps/pc-extension/src/ui/ManualLyricsEntry.tsx",
+        "apps/pc-extension/src/ui/LyricsPicker.tsx"
+      ],
+      "manual": ["MV-LY-02"]
+    },
+    {
       "id": "REQ-SY-01",
       "title": "원문 타임스탬프(또는 사용자가 직접 탭으로 기록한 시간) 기준 행 단위 싱크, AI는 시간 정보를 만들거나 바꾸지 못함, 단어 싱크 흉내 금지",
       "core": "verified",
@@ -764,6 +780,10 @@
     {
       "id": "AT-21",
       "title": "PC Apple Music 웹 플레이어: MusicKit 원시 값으로 현재 행 계산(오디오 요소 위치), 미리듣기·불러오는 중이면 진행을 꾸며내지 않음, iPhone에서 저장한 내 번역을 백업으로 옮기면 같은 스토어 ID로 연결되어 가사·AI 호출 0회"
+    },
+    {
+      "id": "AT-22",
+      "title": "가사 직접 등록: LRCLIB에 없는 곡에 LRC·일반 가사를 등록하면 표시(시간은 입력 값 그대로), 재시작 후 LRCLIB·AI 호출 0회, 이전 판본·내 번역 보존, 같은 내용 재등록은 새 판본 없음, 틀린 LRC·곡 없음은 저장 안 함, 가사 속 지시문 불이행"
     }
   ]
 }

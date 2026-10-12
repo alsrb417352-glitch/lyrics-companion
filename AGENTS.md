@@ -32,7 +32,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 44개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 47개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

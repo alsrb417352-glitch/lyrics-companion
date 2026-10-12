@@ -15,6 +15,7 @@ import {
   type LyricsProvider,
 } from '../lyrics/lyrics-provider.js';
 import type { LrclibRecord } from '../lyrics/lrclib-client.js';
+import type { ParsedUserLyrics } from '../lyrics/user-lyrics.js';
 import { decideMatch, parseTitle, serviceKeyOf, type MatchCandidate } from '../matching/track-identity.js';
 import type { Logger } from '../security/logger.js';
 import type { LyricsStore } from '../storage/lyrics-store.js';
@@ -287,18 +288,54 @@ export class NowPlayingSession {
     if (res.status !== 'found') return { ok: false, error: '이 레코드에는 표시할 가사가 없습니다' };
     const saved = await this.saveFetched(song, res);
     if (gen !== this.state.generation || !saved.lyrics) return { ok: false, error: '곡이 바뀌었습니다' };
-    const lyrics = saved.lyrics;
+    await this.showNewLyrics(saved.lyrics, gen, saved.notices);
+    return { ok: true };
+  }
+
+  /**
+   * 사용자가 직접 등록한 원문 가사(TXT/LRC 파일 또는 입력, D-40)를 현재 곡의 새 판본으로 저장·활성화한다.
+   * 기존 판본·번역은 지우지 않는다(REQ-LY-04). 시간은 사용자가 준 값만 쓴다(불변조건 5).
+   * 지금 표시 중인 가사와 내용이 같으면 새 판본을 만들지 않는다(같은 가사에 붙은 번역이 화면에서 사라지지 않게).
+   * AI 호출은 자동 번역 정책을 그대로 따른다(가사 바꾸기와 같음).
+   */
+  async saveUserLyrics(
+    parsed: ParsedUserLyrics,
+    origin: 'typed' | 'file',
+  ): Promise<{ ok: true; unchanged: boolean } | { ok: false; error: string }> {
+    const gen = this.state.generation;
+    const song = this.state.song;
+    if (!song) return { ok: false, error: '현재 곡이 없습니다' };
+    if (!parsed.ok) return { ok: false, error: '저장할 수 없는 가사입니다' };
+    const v = buildLyricsVersion({
+      id: this.deps.ids.next('lv'),
+      songId: song.id,
+      source: 'user',
+      sourceRef: `user:${origin}`,
+      kind: parsed.kind,
+      ...(parsed.kind === 'synced' ? { timed: parsed.timed } : { plain: parsed.plain }),
+      hasWordTimingSource: parsed.hasWordTiming,
+      createdAtEpochMs: this.deps.clock.nowEpochMs(),
+    });
+    if (this.state.lyrics && this.state.lyrics.contentHash === v.contentHash) return { ok: true, unchanged: true };
+    await this.deps.store.saveLyricsVersion(v, { activate: true });
+    this.deps.logger.info('lyrics.user_saved', { kind: v.kind, lines: v.lines.length, origin });
+    if (gen !== this.state.generation) return { ok: false, error: '곡이 바뀌었습니다' };
+    await this.showNewLyrics(v, gen, parsed.hasWordTiming ? ['word-sync-ignored'] : []);
+    return { ok: true, unchanged: false };
+  }
+
+  /** 새로 활성화한 판본을 화면에 반영하고, 번역이 없으면 자동 번역 정책대로 진행한다. */
+  private async showNewLyrics(lyrics: LyricsVersion, gen: number, notices: SessionState['notices']): Promise<void> {
     this.update(
       { lyricsCandidates: [], translation: null, pronunciation: null, timing: null, translationStatus: 'none' },
       gen,
     );
-    await this.refreshTexts(lyrics, gen, saved.notices);
+    await this.refreshTexts(lyrics, gen, notices);
     if (gen === this.state.generation && !this.state.translation && lyrics.kind !== 'instrumental') {
       void this.track(
         this.runTranslation(() => this.deps.translation.ensureTranslation(lyrics.id, { trigger: 'auto' }), gen),
       );
     }
-    return { ok: true };
   }
 
   private async refreshTexts(lyrics: LyricsVersion, gen: number, notices?: SessionState['notices']): Promise<void> {

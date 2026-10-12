@@ -77,7 +77,7 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   useKeepAwake();
   const s: SessionState = useSessionState(session);
   const [tick, setTick] = useState('');
-  const [picking, setPicking] = useState(false);
+  const [picking, setPicking] = useState<false | 'search' | 'manual'>(false);
   const [editing, setEditing] = useState<EditMode | null>(null);
   const [recording, setRecording] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -205,6 +205,8 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
         initialQuery={s.song.title}
         durationMs={s.song.durationMs}
         candidates={s.lyricsCandidates}
+        hasCurrentLyrics={s.lyrics !== null}
+        startManual={picking === 'manual'}
         onDone={() => setPicking(false)}
       />
     );
@@ -301,7 +303,14 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
             theme={theme}
             kind="primary"
             label={s.lyricsCandidates.length > 0 ? '후보 보고 고르기' : '가사 직접 찾기'}
-            onPress={() => setPicking(true)}
+            onPress={() => setPicking('search')}
+            style={{ marginTop: 8 }}
+          />
+          <Button
+            theme={theme}
+            icon="edit"
+            label="가사 직접 등록 (파일·붙여넣기)"
+            onPress={() => setPicking('manual')}
             style={{ marginTop: 8 }}
           />
         </View>
@@ -413,7 +422,7 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
             </View>
             {moreOpen ? (
               <View style={styles.toolGrid}>
-                <ToolTile theme={theme} icon="swap" label="가사 바꾸기" onPress={() => setPicking(true)} />
+                <ToolTile theme={theme} icon="swap" label="가사 바꾸기" onPress={() => setPicking('search')} />
                 {s.lyrics && s.lyrics.kind !== 'instrumental' && s.translationStatus !== 'pending' ? (
                   <ToolTile
                     theme={theme}

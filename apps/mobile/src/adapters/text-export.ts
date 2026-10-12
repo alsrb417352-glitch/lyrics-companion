@@ -47,11 +47,12 @@ export type PickedText =
   | { canceled: false; name: string; error: string };
 
 /**
- * TXT 파일 하나를 골라 읽는다(번역 묶음 가져오기, D-34). 파일은 불신 데이터: 크기를 먼저 확인하고,
- * 내용 검증은 core(parseTranslationBundle)가 한다.
+ * TXT 파일 하나를 골라 읽는다(번역 묶음 가져오기 D-34, 가사 직접 등록 D-40). 파일은 불신 데이터: 크기를 먼저 확인하고,
+ * 내용 검증은 core(parseTranslationBundle·parseUserLyrics)가 한다.
+ * allowAnyType: .lrc처럼 iOS가 텍스트로 모르는 확장자도 고를 수 있게 모든 파일을 보여 준다(내용은 core가 검증).
  */
-export async function pickTextFile(maxChars: number): Promise<PickedText> {
-  const picked = await File.pickFileAsync({ mimeTypes: ['text/plain'] });
+export async function pickTextFile(maxChars: number, opts: { allowAnyType?: boolean } = {}): Promise<PickedText> {
+  const picked = await File.pickFileAsync({ mimeTypes: opts.allowAnyType ? ['text/plain', '*/*'] : ['text/plain'] });
   if (picked.canceled) return { canceled: true };
   const file = picked.result;
   // UTF-8 한 글자는 최대 4바이트

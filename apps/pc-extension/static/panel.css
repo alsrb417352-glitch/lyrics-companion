@@ -375,6 +375,14 @@ textarea.input {
 .paste {
   min-height: 120px;
 }
+/* 가사 직접 등록: 긴 가사를 붙여 넣어도 화면을 다 차지하지 않게 높이를 고정하고 안에서 스크롤 */
+textarea.lyrics-input {
+  field-sizing: fixed;
+  height: 240px;
+  min-height: 160px;
+  max-height: 60vh;
+  overflow: auto;
+}
 .field {
   display: flex;
   flex-direction: column;
