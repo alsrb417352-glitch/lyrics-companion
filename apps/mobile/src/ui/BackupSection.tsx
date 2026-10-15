@@ -80,9 +80,10 @@ export function BackupSection(props: { services: AppServices; theme: Theme }) {
     <View>
       <Text style={[styles.h2, { color: theme.text }]}>백업</Text>
       <Note theme={theme}>
-        무료 Apple ID로 설치한 앱은 7일마다 다시 설치해야 합니다. 앱을 지우거나 다른 iPhone으로 옮기기 전에 백업 파일을
-        만들어 두세요. 백업에는 가사·번역·발음·싱크 보정값이 들어가고, API 키·AI 제공자 설정·자동 번역 동의는 들어가지
-        않습니다.
+        {services.android
+          ? '앱을 지우거나 다른 기기(iPhone·PC 포함)로 옮기기 전에 백업 파일을 만들어 두세요.'
+          : '무료 Apple ID로 설치한 앱은 7일마다 다시 설치해야 합니다. 앱을 지우거나 다른 iPhone으로 옮기기 전에 백업 파일을 만들어 두세요.'}{' '}
+        백업에는 가사·번역·발음·싱크 보정값이 들어가고, API 키·AI 제공자 설정·자동 번역 동의는 들어가지 않습니다.
       </Note>
       <View style={styles.rowGap}>
         <Button theme={theme} kind="primary" label="백업 파일 만들기" onPress={() => void onExport()} disabled={busy} />

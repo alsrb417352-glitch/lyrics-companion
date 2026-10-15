@@ -36,6 +36,8 @@ Mac이 없으므로 GitHub Actions(macOS 서버)에서 서명 없는 IPA를 만�
 |---|---|---|---|
 | Apple Music(Music 앱) | 예 | 예(1초 재조회) | 예 |
 
-Spotify·YouTube Music은 지원하지 않는다(docs/plan.md D-17).
+iPhone에서 Spotify·YouTube Music은 지원하지 않는다(docs/plan.md D-17).
+
+**Android(2026-10-14, D-41)**: Spotify·YouTube Music·Apple Music 앱을 OS 미디어 세션(알림 접근 권한)으로 따른다. 네이티브 모듈은 `modules/now-playing/android`(Kotlin, `AndroidMediaSessions`), 해석은 core `playback/android-media-session.ts`, 어댑터는 `src/adapters/android-playback-source.ts`. 플레이리스트 탭은 재생 앱의 지금 재생 목록(`src/ui/QueueScreen.tsx`), 검색 탭은 고른 앱에 검색 재생. 빌드는 GitHub Actions(`ci/android-apk.yml`), 설치는 `docs/android-install.md`. 미리 확인: `npm run typecheck && npm run bundle:android`.
 
 가사 자동 조회: Music 앱 표기 → 스토어 ID로 일본어·영어·한국어 표기 → 제목 검색 순서로 찾는다. 가수 표기가 달라 같은 곡인지 확실하지 않으면 자동 적용하지 않고 후보를 보여 준다(지금 재생 › 후보 보고 고르기 / 가사 바꾸기).

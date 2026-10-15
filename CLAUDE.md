@@ -7,6 +7,7 @@
 Phase 0 완료: `packages/core`(플랫폼 독립 로직) + 검증 하네스.
 Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04: Mac 없음·무료 Apple ID·Spotify/YouTube Music 지원 안 함·Android는 나중): `apps/mobile` Expo 앱 + Swift 모듈 작성. GitHub Actions iOS 빌드 성공(2026-10-05 #3, 빌드 결과 검사 포함 — Swift 모듈 컴파일 확인). 편집·백업 화면 추가(2026-10-05). 플레이리스트 탭(보관함 플레이리스트 바로 재생)·원문 TXT 내보내기·수동 싱크(탭 기록) 추가(2026-10-05, D-28~30). 플레이리스트 가사 원문 일괄 받기 추가(2026-10-05, D-31). LRCLIB 503 과부하 자동 재시도(2026-10-06, D-33). 아이콘 중심 UI 개편(2026-10-05, D-32, react-native-svg). 플레이리스트 번역 묶음 파일(번역할 곡 원문 한 파일로 내보내기 → 채운 번역 한 번에 가져오기, 2026-10-06, D-34). 번역 묶음에 선택 [발음] 칸(일본어 곡 "내 발음" 일괄 저장, 2026-10-06, D-35). 가사 직접 등록(LRCLIB에 없는 곡에 TXT/LRC 파일·붙여넣기로 원문 저장, iPhone·PC, 2026-10-12, D-40). **실기기·실제 AI 연동 확인 0건**. iOS 빌드는 GitHub Actions(`ci/ios-unsigned-ipa.yml`), 설치는 `docs/ios-install.md`.
 **PC 버전**(2026-10-06 사용자 요청, D-36·D-37): `apps/pc-extension` — Windows Chrome/Edge 확장 프로그램(사이드 패널, music.apple.com 웹 플레이어 연동, 같은 core). API 키는 Windows DPAPI 보안 저장소 도우미(`native-host/`)에만. 설치는 `docs/pc-install.md`. **실제 브라우저 설치·Apple Music 웹 연동 확인 0건**. 이 PC에는 전역 Node가 없어 프로젝트 안 휴대용 Node(`.tmp/node/node-v24.21.0-win-x64`)로 검사한다(PATH 앞에 붙여 실행).
+**Android 버전**(2026-10-14 사용자 요청, D-41·D-42): 같은 `apps/mobile` 앱을 Android에서 **Spotify·YouTube Music·Apple Music 앱**과 함께 쓴다(UI·기능 동일). 재생 정보는 OS MediaSession(알림 접근 권한, 알림 내용 미사용) — Kotlin 모듈 `modules/now-playing/android`(원시 값만) + core `playback/android-media-session.ts`(해석). 플레이리스트 탭 = 재생 앱의 지금 재생 목록(대기열), 검색 탭 = 고른 앱에 검색 재생. Android Apple Music 앱의 MEDIA_ID는 곡 ID로 쓰지 않는다(형식 미확인, 불변조건 6). APK는 GitHub Actions(`ci/android-apk.yml`, 템플릿 디버그 키 서명), 설치는 `docs/android-install.md`. **Kotlin 컴파일·실기기 확인 0건**(이 PC에는 Android SDK 없음 — 타입 검사·JS 번들·prebuild까지 확인).
 **AI 모델 이름**(2026-10-12, D-39): OpenAI 모델 칸에는 API ID(`gpt-6-luna`)를 정확히 넣어야 한다 — `luna`·`Luna`는 404 model_not_found. 설정의 "모델 목록 불러오기"(`GET /models`, 무료·가사 전송 없음)로 확인. 실기기에서 OpenAI까지 요청 도달·키 인증 통과는 확인(번역 성공은 미확인).
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
@@ -32,7 +33,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 47개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 53개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

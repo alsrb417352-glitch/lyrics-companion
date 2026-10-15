@@ -17,6 +17,7 @@ import {
 } from '@lyrics-companion/core';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { FetchHttpClient } from './adapters/http';
+import { AndroidMediaPlayback } from './adapters/android-playback-source';
 import { IosMusicPlaybackSource } from './adapters/ios-playback-source';
 import { ExpoSecretStore } from './adapters/secure-store';
 import { ExpoSqliteDriver } from './adapters/sqlite-driver';
@@ -29,7 +30,13 @@ import { RingLogSink, SystemClock, UuidIds } from './adapters/system';
 export const DEFAULT_LYRICS_LEAD_MS = 250;
 
 /** LRCLIB 문서가 요구하는 클라이언트 식별 문자열(앱 이름·버전·용도) */
-export const LRCLIB_CLIENT_ID = 'LyricsCompanion/0.1.0 (personal-use iOS app)';
+export const LRCLIB_CLIENT_ID = 'LyricsCompanion/0.1.0 (personal-use mobile app)';
+
+/**
+ * 재생 앱 연동. iPhone은 Music 앱(Apple Music), Android는 Spotify·YouTube Music·Apple Music 앱(MediaSession, D-41).
+ * 둘 다 PlaybackSource + 재생 제어 + 권한 요청을 제공하고, 플랫폼 전용 기능은 platform으로 구분한다.
+ */
+export type AppPlayback = IosMusicPlaybackSource | AndroidMediaPlayback;
 
 /**
  * 앱 조립 지점(composition root). core 객체에 포트 구현을 주입한다.
@@ -45,7 +52,9 @@ export interface AppServices {
   session: NowPlayingSession;
   lrclib: LrclibClient;
   catalog: ItunesCatalogClient;
-  playback: IosMusicPlaybackSource | null;
+  playback: AppPlayback | null;
+  /** Android 재생 앱 연동(재생 목록·검색 재생·앱 정보 화면). iPhone이면 null */
+  android: AndroidMediaPlayback | null;
   /** 플레이리스트 가사 원문 일괄 받기(D-31). 화면을 옮겨도 계속되도록 앱 전체에서 하나만 둔다. */
   playlistBatch: PlaylistLyricsBatch;
   logs: RingLogSink;
@@ -117,10 +126,11 @@ export async function createAppServices(): Promise<AppServices> {
     defaultGlobalOffsetMs: DEFAULT_LYRICS_LEAD_MS,
   });
   await session.start();
-  const playback = IosMusicPlaybackSource.available() ? new IosMusicPlaybackSource(clock) : null;
+  const android = AndroidMediaPlayback.available() ? new AndroidMediaPlayback(clock) : null;
+  const playback: AppPlayback | null = IosMusicPlaybackSource.available() ? new IosMusicPlaybackSource(clock) : android;
   // 같은 LRCLIB 클라이언트를 써서 요청 간격·Retry-After를 지금 재생 조회와 함께 지킨다. AI는 쓰지 않는다.
   const playlistBatch = new PlaylistLyricsBatch({ store, lyrics, clock, ids, logger });
-  // 받는 동안 화면이 꺼지면 iOS가 앱을 멈추므로 화면 꺼짐을 막는다(끝나면 해제).
+  // 받는 동안 화면이 꺼지면 OS가 앱을 멈추거나 늦추므로 화면 꺼짐을 막는다(끝나면 해제).
   let awake = false;
   playlistBatch.subscribe((s) => {
     if (s.running === awake) return;
@@ -139,6 +149,7 @@ export async function createAppServices(): Promise<AppServices> {
     lrclib,
     catalog,
     playback,
+    android,
     playlistBatch,
     logs,
     listProviderModels: (providerId, baseUrl) =>

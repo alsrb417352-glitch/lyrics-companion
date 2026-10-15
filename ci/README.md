@@ -17,3 +17,9 @@ Copy-Item ci\ios-unsigned-ipa.yml .github\workflows\ios-unsigned-ipa.yml
 ```
 `macos-26` 러너에서 core 검사 → `expo prebuild` → Xcode Release 빌드(서명 없음) → `.ipa` 아티팩트(14일 보관). 비밀 값 없음. 설치는 [`docs/ios-install.md`](../docs/ios-install.md).
 비공개 저장소에서는 macOS 러너가 무료 사용량을 빠르게 소모하거나 과금될 수 있다(공개 저장소는 무료).
+
+## android-apk.yml — Android 앱 빌드 (2026-10-14 추가, D-41·D-42)
+```powershell
+Copy-Item ci\android-apk.yml .github\workflows\android-apk.yml
+```
+`ubuntu-latest` 러너에서 core 검사 → `expo prebuild --platform android` → Gradle Release 빌드 → `.apk` 아티팩트(14일 보관). APK 검사 단계에서 알림 리스너 서비스·JS 번들 포함 여부와 막아야 할 권한(다른 앱 위에 그리기)이 빠졌는지 확인한다. 비밀 값 없음. Expo 템플릿의 디버그 키로 서명하므로 빌드마다 서명이 같아 덮어 설치할 수 있다(개인 사이드로드 전용). 설치는 [`docs/android-install.md`](../docs/android-install.md).

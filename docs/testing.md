@@ -36,8 +36,8 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 ## 3. 테스트 구성
 | 종류 | 위치 | 내용 |
 |---|---|---|
-| 단위 | `packages/core/test/unit/` | 플레이리스트 원시 값 해석, 원문 TXT 내보내기, LRC 파서, SHA-256, 언어 감지, 가나→한글, 프롬프트·응답 검증 계약, LRCLIB 클라이언트, 가져오기, 마스킹, 표시 구성 |
-| 수용 | `packages/core/test/acceptance/` | AT-01~AT-22 + 판본·버전 관리·사용자 발음 편집. 실제 core 객체를 하네스로 조립 |
+| 단위 | `packages/core/test/unit/` | Android 미디어 세션 값 해석(`android-media-session`), 플레이리스트 원시 값 해석, 원문 TXT 내보내기, LRC 파서, SHA-256, 언어 감지, 가나→한글, 프롬프트·응답 검증 계약, LRCLIB 클라이언트, 가져오기, 마스킹, 표시 구성 |
+| 수용 | `packages/core/test/acceptance/` | AT-01~AT-23 + 판본·버전 관리·사용자 발음 편집. 실제 core 객체를 하네스로 조립 |
 | 스크립트 | `scripts/test/` | 비밀정보 검사기, PC 보안 저장소 도우미(`secret-host.test.mjs` — **Windows에서만** 실행, 저장 폴더는 `.tmp/`로 바꿔 사용자 프로필·레지스트리를 건드리지 않음) |
 | PC 확장 프로그램 | `apps/pc-extension` | `npm run check`의 `pc` 단계: 타입 검사 + 확장 프로그램 빌드(`dist/`). 의존성이 없으면 건너뜀(`cd apps/pc-extension && npm ci`). 화면은 `npm run demo`(합성 데이터·가짜 재생기, 네트워크 없음)로 확인 |
 | 하네스 | `packages/core/test/support/` | `FakeClock`, `FakeHttp`, `FakeTranslationProvider`(지연·오류·거절 주입), `MemorySecretStore`, `MemorySink`, `NodeSqliteDriver`(저장 실패·지연 주입), `createHarness().restart()`(앱 재실행 재현) |
@@ -68,6 +68,7 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 | AT-20 | 플레이리스트 번역 묶음: 내 번역 없는 곡만 내보내기(가사 없음·연주곡·중복 제외, 저장소만 읽음·곡 생성 없음), 채운 파일 가져오기 → 미리보기(저장 안 함) → 저장 시 여러 곡 내 번역 추가(AI 번역 보존·내 번역 우선), 재생 시 AI·LRCLIB 호출 0회, 이미 내 번역 있는 곡 건너뜀(미리보기 뒤 생긴 경우 저장 직전 재확인), 줄 수 불일치·빈 칸·원문 그대로·깨진 글자·없는/바뀐 판본·중복 저장 안 함, CRLF·BOM·코드 블록·굵게 표시 파싱, 묶음 아님·ID 형식 밖·너무 큼 거부, 번역 칸 지시문 불이행, 로그에 가사 없음 , **다른 기기(iPhone)에서 만든 파일은 판본 ID가 없으면 [원문]이 글자 그대로 같은 저장된 가사에 연결(D-38), 같은 원문 곡이 여럿·원문이 다르면 저장 안 함** | acceptance/translation-bundle |
 | AT-21 | PC Apple Music 웹 플레이어: MusicKit 원시 값(합성)으로 현재 행 계산(오디오 요소의 소수 위치 사용), 미리듣기는 위치 모름·강조 없음, 불러오는 중이면 시간이 지나도 위치 고정, iPhone(Music 앱)에서 저장한 내 번역을 백업으로 새 PC 설치본에 옮긴 뒤 웹 플레이어로 재생하면 같은 스토어 ID로 같은 곡에 연결되어 LRCLIB·AI 호출 0회(자동 번역 켜짐 상태) | acceptance/pc-web-player (+ unit/musickit-web) |
 | AT-22 | 가사 직접 등록(D-40): LRCLIB에 없는 곡에 LRC 등록 → 싱크 가사(시간은 입력 값 그대로·현재 행 계산), 붙여 넣은 시간 없는 가사 → 일반 가사, 재시작 후 다시 재생해도 LRCLIB·AI 호출 0회, LRCLIB 가사를 바꿔도 이전 판본 보존, 같은 내용 재등록은 새 판본 없음(내 번역 유지), 시간 없는 줄이 섞인 LRC·틀린 시간·곡 없음은 저장 안 함("시간 정보 없이"를 고르면 시간 표시를 지운 일반 가사), 빈 입력·너무 큼·줄 수·줄 길이 한도(백업 한도와 같음), 가사 속 지시문 불이행, 로그에 가사 없음 | acceptance/user-lyrics (+ unit/user-lyrics) |
+| AT-23 | Android 미디어 세션(D-41): Spotify 세션 원시 값(합성)으로 현재 행 계산(갱신 시각 기준 위치), 지원하지 않는 앱 세션은 쓰지 않음, 위치 모름(-1)·버퍼링·광고는 진행을 꾸며내지 않고 곡·AI 변화 없음, iPhone 백업을 가져온 Android에서 같은 곡을 Spotify로 재생하면 자동 연결하지 않고 후보 확인 → 내 번역 표시·LRCLIB·AI 호출 0회(자동 번역 켜짐), YouTube Music 라이브 영상은 영상 표기만 정리되고 Live 표시가 남아 별도 녹음, Spotify 재생 목록으로 일괄 받은 곡을 재생하면 LRCLIB 재조회 0회 | acceptance/android-media-session (+ unit/android-media-session) |
 
 요구사항별 연결은 [`traceability.md`](traceability.md)(자동 생성)와 실행 결과 `reports/harness/traceability-run.md`에서 확인한다.
 
@@ -80,7 +81,8 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 ## 4. 자동화하지 않는(별도 환경이 필요한) 검증
 | 구분 | 필요 환경 | 자동 실행 |
 |---|---|---|
-| Android 앱 빌드·실행 | Android SDK, JDK, (권장) ASCII 경로 가상 드라이브 | Phase 1 이후 CI 추가 예정 |
+| Android 앱 빌드 | Android SDK, JDK(이 PC에는 없음) | **GitHub Actions `android-apk`**(ubuntu-latest, Release APK + APK 검사, D-42). 로컬 Windows에서는 앱 타입 검사·JS 번들(`npm run bundle:android`)·`expo prebuild --platform android`까지만 가능 |
+| Android 실기기 설치·실행 | Android 폰 + Spotify·YouTube Music·Apple Music 앱 | 수동만(MV-AND-INSTALL-01, MV-PB-AND-01~03, docs/android-install.md) |
 | iOS 앱 빌드 | macOS + Xcode 26.4+ | **GitHub Actions `ios-unsigned-ipa`**(macos-26 러너, 무서명 Release IPA). 로컬 Windows·클라우드 Linux에서는 앱 타입 검사·JS 번들(`npm run bundle:ios`)·prebuild까지만 가능 |
 | iOS 실기기 설치·실행 | iPhone + Windows Sideloadly + 무료 Apple ID | 수동만(docs/ios-install.md) |
 | 실제 스트리밍 연동 | 실기기 + 각 서비스 계정 | 수동만 |
@@ -101,6 +103,8 @@ npm run check       # 포맷 → 린트 → 타입 → 테스트 → 빌드 → 
 - **MV-PC-03** iPhone ↔ PC 데이터 이동(2026-10-06): iPhone 설정 › 백업 파일 만들기 → PC로 옮겨 설정 › 백업 가져오기 → 같은 곡을 Apple Music 웹에서 재생 → 내 번역·발음·싱크 기록이 바로 보이고 LRCLIB·AI 요청이 없는지(오늘 요청 수 변화 없음) → PC에서 고친 번역을 백업해 iPhone에서 가져오기. 한국 계정에서 웹 플레이어와 Music 앱의 스토어 ID가 같은지(같은 곡으로 연결되는지) 기록.
 - **MV-IOS-INSTALL-01** 무료 서명 설치: GitHub Actions IPA 빌드 성공 → Sideloadly 설치 → 신뢰·개발자 모드 → 실행. 번역·설정·API 키 저장 후 같은 Apple ID로 재설치(7일 갱신 모사) → 데이터·키 유지 여부 기록.
 - **MV-PB-CTL-01** 재생 제어: 지원 조합에서 각 명령 동작, 미지원 명령 버튼 숨김.
+- **MV-AND-INSTALL-01** Android 설치(2026-10-14, D-42): GitHub Actions `android-apk` 빌드 성공(APK 검사 단계 통과) → 폰에 APK 설치(출처를 알 수 없는 앱 허용, Play 프로텍트 경고 처리) → 실행 → 알림 접근 허용(Android 13+ "제한된 설정 허용" 필요 여부 기록) → 번역·설정·API 키 저장 후 **다음 빌드 APK를 덮어 설치**해 데이터·키가 유지되는지 기록. 설정 › 앱 › 권한에 인터넷·알림 접근 외 권한이 없는지. 백업 파일 만들기·원문 txt 내보내기 → 공유 시트로 Drive·파일 앱에 실제로 저장되는지(공유가 끝나면 캐시 사본을 지우므로, 받는 앱이 나중에 읽는 경우 빈 파일이 되지 않는지), 백업·txt·.lrc 파일 고르기.
+- **MV-PB-AND-03** Android 재생 목록·검색 재생·제어(2026-10-14, D-41): Spotify·YouTube Music·Apple Music 각각 — 플레이리스트 재생 후 플레이리스트 탭에 재생 목록이 보이는지(제목·곡 수·지금 곡 강조), 곡 누르면 그 곡부터 재생, 재생/셔플 버튼, 가사 원문 일괄 받기 → 그 곡 재생 시 LRCLIB 재조회 없는지(오늘 요청 수), 번역 묶음 내보내기·가져오기. 검색 탭: 앱 고르기 칩에 설치된 앱만 보이는지, 곡 누르면 앱 전환 없이(또는 앱이 열리며) 재생되는지, "그대로 재생" 줄. 지금 재생: 재생·일시정지·±10초·이전/다음·진행 막대·줄 탭 이동이 각 앱에서 동작하는지. 두 앱을 번갈아 재생할 때 따르는 앱이 바뀌고 헤더 앱 이름이 맞는지. Spotify 무료 광고 중 가사·번역 요청이 생기지 않는지. YouTube Music 뮤직비디오(공식 MV·라이브 영상) 곡의 제목 정리·가사 조회.
 - **MV-UI-01** 가사 화면 검토: 대비 4.5:1 이상(색 대비 도구), 현재 행 강조, 부드러운 스크롤, 직접 스크롤 시 추적 중지·복귀 버튼, 위치 모름 표시, Apple 자산 미사용.
 - **MV-UI-02** 접근성: 시스템 글자 크기 최대(200%), VoiceOver/TalkBack 읽기 순서("원문. 발음 …. 번역 …"), 동작 줄이기 켬 시 애니메이션 없음.
 - **MV-AI-01** 실제 AI 제공자(사용자 본인 키, **1회만**, 합성 가사 사용): 키 등록 → 설정 "모델 목록 불러오기"로 모델 ID 확인(목록 조회는 무료·가사 전송 없음, D-39) → 동의 화면 → 번역 1회 → 비용 확인 → 결과 저장·재생 시 재호출 없음 확인. 제공자의 중복 요청 방지 키·요청 ID 조회 지원 여부를 문서로 확인해 기록. 오류 메시지에 키가 포함되는지 확인.

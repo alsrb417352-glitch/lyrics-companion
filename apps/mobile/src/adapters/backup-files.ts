@@ -11,10 +11,10 @@ import {
 } from '@lyrics-companion/core';
 
 /**
- * 백업 파일 입출력(iOS). 판단·검증은 core(parseBackup·importUserData)가 하고, 여기서는 파일만 다룬다.
- * - 내보내기: 앱 캐시에 JSON을 쓰고 iOS 공유 시트를 연다 → 사용자가 "파일에 저장"(iCloud Drive·나의 iPhone) 선택.
+ * 백업 파일 입출력(iOS·Android). 판단·검증은 core(parseBackup·importUserData)가 하고, 여기서는 파일만 다룬다.
+ * - 내보내기: 앱 캐시에 JSON을 쓰고 공유 시트를 연다 → 사용자가 "파일에 저장"(iPhone: iCloud Drive·나의 iPhone, Android: Drive·파일 앱 등) 선택.
  *   공유가 끝나면 캐시 사본을 지운다. 앱이 직접 외부로 보내지 않는다.
- * - 가져오기: iOS 파일 선택기 → 읽기만 한다(선택한 파일은 바꾸거나 지우지 않음).
+ * - 가져오기: 시스템 파일 선택기 → 읽기만 한다(선택한 파일은 바꾸거나 지우지 않음).
  * 백업에는 API 키·제공자 설정·자동 번역 동의가 없다(core가 넣지 않음).
  */
 

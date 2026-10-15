@@ -17,6 +17,7 @@ import { NowPlaying } from '../../modules/now-playing';
  */
 export class IosMusicPlaybackSource implements PlaybackSource {
   readonly id = 'ios-system-music';
+  readonly platform = 'ios' as const;
 
   constructor(private readonly clock: Clock) {}
 

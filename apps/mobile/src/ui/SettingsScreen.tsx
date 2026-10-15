@@ -361,6 +361,9 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
       <Note theme={theme}>
         가사·번역·발음·싱크 보정값은 이 기기 안(앱 문서 영역의 SQLite)에만 저장되고, 위의 백업 파일을 만들 때만 밖으로
         나갑니다. 가사 출처: LRCLIB. 곡 검색: Apple iTunes Search.
+        {services.android
+          ? ' 재생 정보: Android 미디어 세션(알림 접근 권한 — 알림 내용은 읽지 않고, Spotify·YouTube Music·Apple Music 앱의 재생 중인 곡 정보만 씀).'
+          : ''}
       </Note>
       {msg ? (
         <Note theme={theme} tone={msg.danger ? 'danger' : 'dim'}>

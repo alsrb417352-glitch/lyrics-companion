@@ -28,6 +28,12 @@ const VERSION_PATTERNS: Array<[RegExp, string]> = [
   [/\b(self-?cover)\b|セルフカバー/i, 'cover'],
 ];
 
+/** 글에 녹음 버전 표시(live, remix 등)가 들어 있는지. 괄호 내용을 지워도 되는지 판단할 때 쓴다. */
+export function hasVersionMarker(s: string): boolean {
+  const n = s.normalize('NFKC');
+  return VERSION_PATTERNS.some(([re]) => re.test(n)) || VER_PATTERN.test(n);
+}
+
 /** 버전 정보로 보지 않는 괄호 내용(같은 녹음으로 취급) */
 const NEUTRAL_PATTERNS = [/\bremaster(ed)?\b|リマスター/i, /\b(feat\.?|ft\.?|featuring)\b/i, /\bexplicit\b|\bclean\b/i];
 

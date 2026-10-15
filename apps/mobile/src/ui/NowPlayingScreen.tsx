@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
-import type { SessionState, SkipReason, TranslationOutcome } from '@lyrics-companion/core';
+import {
+  streamingServiceLabel,
+  type SessionState,
+  type SkipReason,
+  type TranslationOutcome,
+} from '@lyrics-companion/core';
 import type { AppServices } from '../services';
 import { exportLyricsText } from '../adapters/text-export';
+import { AndroidAccessPanel } from './AndroidAccess';
 import { ArtworkTile, Button, Chip, IconButton, Note } from './common';
 import { Icon, type IconName } from './icons';
 import { PlaybackBar } from './PlaybackBar';
@@ -148,6 +154,10 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
     }
   };
 
+  if (services.android && pb.access !== 'granted') {
+    return <AndroidAccessPanel android={services.android} playback={pb} theme={theme} />;
+  }
+
   if (services.playback && pb.access !== 'granted') {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
@@ -219,7 +229,10 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
         <ArtworkTile seed={s.track ? `${s.track.album ?? s.track.title}|${s.track.artist}` : 'idle'} size={56} />
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-            {s.track?.title ?? 'Music 앱에서 곡을 재생하세요'}
+            {s.track?.title ??
+              (services.android
+                ? 'Spotify·YouTube Music·Apple Music에서 곡을 재생하세요'
+                : 'Music 앱에서 곡을 재생하세요')}
           </Text>
           {s.track ? (
             <Text style={{ color: theme.textDim, fontSize: 15 }} numberOfLines={1}>
@@ -227,19 +240,29 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
               {s.track.album ? ` · ${s.track.album}` : ''}
             </Text>
           ) : null}
-          {s.phase === 'ready' && view ? (
+          {(s.phase === 'ready' && view) || (services.android && s.track) ? (
             <View style={styles.pillRow}>
-              <View style={[styles.pill, { backgroundColor: theme.surface }]}>
-                <Text style={{ color: theme.textDim, fontSize: 11, fontWeight: '600' }} numberOfLines={1}>
-                  {view.mode === 'position-unknown'
-                    ? '재생 위치 모름'
-                    : view.mode === 'static'
-                      ? '시간 정보 없는 가사'
-                      : timing?.source === 'user'
-                        ? '내가 기록한 싱크'
-                        : '자동 싱크'}
-                </Text>
-              </View>
+              {services.android && s.track ? (
+                // Android는 여러 재생 앱을 따르므로 지금 어느 앱의 곡인지 보여 준다
+                <View style={[styles.pill, { backgroundColor: theme.surface, marginRight: 6 }]}>
+                  <Text style={{ color: theme.textDim, fontSize: 11, fontWeight: '600' }} numberOfLines={1}>
+                    {streamingServiceLabel(s.track.service)}
+                  </Text>
+                </View>
+              ) : null}
+              {s.phase === 'ready' && view ? (
+                <View style={[styles.pill, { backgroundColor: theme.surface }]}>
+                  <Text style={{ color: theme.textDim, fontSize: 11, fontWeight: '600' }} numberOfLines={1}>
+                    {view.mode === 'position-unknown'
+                      ? '재생 위치 모름'
+                      : view.mode === 'static'
+                        ? '시간 정보 없는 가사'
+                        : timing?.source === 'user'
+                          ? '내가 기록한 싱크'
+                          : '자동 싱크'}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -259,7 +282,10 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
       {/* 본문 */}
       {!services.playback ? (
         <View style={styles.center}>
-          <Note theme={theme}>이 앱은 iPhone의 Music 앱(Apple Music)과 함께 동작합니다.</Note>
+          <Note theme={theme}>
+            이 앱은 iPhone의 Music 앱(Apple Music) 또는 Android의 Spotify·YouTube Music·Apple Music 앱과 함께
+            동작합니다.
+          </Note>
         </View>
       ) : s.phase === 'idle' || s.phase === 'resolving' || s.phase === 'loading-lyrics' ? (
         <View style={styles.center}>
@@ -320,7 +346,7 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           view={view}
           {...(timedKind === 'synced' && control
             ? {
-                // 줄을 탭하면 Music 앱을 그 위치로 이동(원문 타임스탬프 또는 내 기록 + 보정값 기준)
+                // 줄을 탭하면 재생 앱을 그 위치로 이동(원문 타임스탬프 또는 내 기록 + 보정값 기준)
                 onPressLine: (i: number) => {
                   const start = session.lineStartMs(i);
                   if (start != null)

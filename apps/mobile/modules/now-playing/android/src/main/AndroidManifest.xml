@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Android 11+ 패키지 공개 범위: 지원 재생 앱이 설치되어 있는지 확인하고(검색 탭), 그 앱을 열거나 검색 재생 요청을 보내기 위해 필요하다.
+    이 세 앱 밖의 설치 앱 목록은 보지 않는다(QUERY_ALL_PACKAGES 쓰지 않음).
+  -->
+  <queries>
+    <package android:name="com.spotify.music" />
+    <package android:name="com.google.android.apps.youtube.music" />
+    <package android:name="com.apple.android.music" />
+  </queries>
+
+  <application>
+    <!--
+      알림 리스너는 MediaSessionManager.getActiveSessions()를 부르기 위한 자격으로만 등록한다(MEDIA_CONTENT_CONTROL은 시스템 앱 전용).
+      사용자가 설정 › 알림 접근에서 허용해야 동작하며, 알림 내용은 읽지도 저장하지도 않는다(docs/security.md §3).
+    -->
+    <service
+      android:name="expo.modules.nowplaying.LyricsNotificationListener"
+      android:exported="true"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
+  </application>
+</manifest>

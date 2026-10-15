@@ -389,6 +389,55 @@ const MUTANTS = [
     find: "if (long >= 0) return { code: 'LINE_TOO_LONG', lineNumber: long + 1 };",
     replace: '// mutated',
   },
+  {
+    id: 'M48',
+    req: 'REQ-SY-02',
+    desc: 'Android: 위치 모름(-1)을 위치 값으로 받아들임(진행을 꾸며냄, 불변조건 5, D-41)',
+    file: S('playback/android-media-session.ts'),
+    find: 'if (p === null || p < 0) return null;',
+    replace: 'if (p === null) return null;',
+  },
+  {
+    id: 'M49',
+    req: 'REQ-SY-02',
+    desc: 'Android: 곡 길이를 넘긴 오래된 재생 상태를 곡 끝 위치로 받아들임(불변조건 5, D-41)',
+    file: S('playback/android-media-session.ts'),
+    find: 'if (pos > durationMs + ANDROID_PAST_END_TOLERANCE_MS) return null;',
+    replace: '// mutated',
+  },
+  {
+    id: 'M50',
+    req: 'REQ-LY-03',
+    desc: 'Android: 형식을 모르는 Apple Music 앱 MEDIA_ID를 스토어 ID처럼 곡 ID로 씀(다른 곡 연결, 불변조건 6, D-41)',
+    file: S('playback/android-media-session.ts'),
+    find: "  if (service === 'youtube-music') return /^[A-Za-z0-9_-]{11}$/.test(mediaId) ? mediaId : null;\n  return null;",
+    replace:
+      "  if (service === 'youtube-music') return /^[A-Za-z0-9_-]{11}$/.test(mediaId) ? mediaId : null;\n  return mediaId;",
+  },
+  {
+    id: 'M51',
+    req: 'REQ-SEC-06',
+    desc: 'Android: 지원하지 않는 앱의 미디어 세션도 따름(다른 앱 재생 정보 사용, D-41)',
+    file: S('playback/android-media-session.ts'),
+    find: 'const supported = sessions.filter((s) => androidPlayerOf(s.packageName) !== null);',
+    replace: 'const supported = sessions.filter(() => true);',
+  },
+  {
+    id: 'M52',
+    req: 'REQ-PB-07',
+    desc: 'Android: Spotify 광고·팟캐스트를 곡으로 봄(가사 조회·번역 대상이 됨, D-41)',
+    file: S('playback/android-media-session.ts'),
+    find: "if (service === 'spotify' && mediaId) {",
+    replace: "if (service === 'spotify' && mediaId && Math.random() > 2) {",
+  },
+  {
+    id: 'M53',
+    req: 'REQ-LY-03',
+    desc: '곡 변경 판단에서 서비스 비교 제거(Android에서 다른 앱으로 옮겨도 같은 곡으로 봄)',
+    file: S('playback/musickit-web.ts'),
+    find: 'if (a.service !== b.service) return false;',
+    replace: '// mutated',
+  },
 ];
 
 const vitest = binPath('vitest');

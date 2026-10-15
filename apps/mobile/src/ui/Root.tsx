@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { createAppServices, type AppServices } from '../services';
 import { NowPlayingScreen } from './NowPlayingScreen';
 import { PlaylistsScreen } from './PlaylistsScreen';
+import { QueueScreen } from './QueueScreen';
 import { SearchScreen } from './SearchScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { Icon, type IconName } from './icons';
@@ -28,7 +29,17 @@ function Main(props: { services: AppServices; theme: Theme }) {
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.bg }]} edges={['top', 'bottom']}>
       <View style={styles.flex}>
         {tab === 'now' ? <NowPlayingScreen services={services} playback={playback} theme={theme} /> : null}
-        {tab === 'playlists' ? (
+        {tab === 'playlists' && services.android ? (
+          // Android: 지금 따르는 재생 앱의 재생 목록(Spotify·YouTube Music은 플레이리스트 목록 API가 없음, D-41)
+          <QueueScreen
+            services={services}
+            android={services.android}
+            playback={playback}
+            theme={theme}
+            onOpenNowPlaying={() => setTab('now')}
+          />
+        ) : null}
+        {tab === 'playlists' && !services.android ? (
           <PlaylistsScreen
             services={services}
             playback={playback}

@@ -171,9 +171,13 @@ export function mapMusicKitQueue(items: unknown): MusicKitQueueTrack[] {
   return out;
 }
 
-/** 같은 곡인지(곡 변경 판단용). 스토어 ID가 있으면 ID로, 없으면 메타데이터로 비교한다. */
+/**
+ * 같은 곡인지(곡 변경 판단용). 서비스가 다르면 다른 곡(Android에서 Spotify → YouTube Music으로 옮긴 경우 등),
+ * 서비스 곡 ID가 있으면 ID로, 없으면 메타데이터로 비교한다.
+ */
 export function sameServiceTrack(a: ServiceTrackRef | null, b: ServiceTrackRef | null): boolean {
   if (!a || !b) return a === b;
+  if (a.service !== b.service) return false;
   if (a.serviceTrackId || b.serviceTrackId) return a.serviceTrackId === b.serviceTrackId;
   return a.title === b.title && a.artist === b.artist && a.album === b.album && a.durationMs === b.durationMs;
 }

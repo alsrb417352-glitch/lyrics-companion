@@ -1,0 +1,108 @@
+# Android APK 빌드 (Spotify·YouTube Music·Apple Music 앱 연동, docs/plan.md D-41·D-42)
+# - GitHub의 Ubuntu 러너에서 core 검사 → expo prebuild → Gradle Release 빌드 → .apk 아티팩트(14일 보관).
+# - 서명: Expo 템플릿의 디버그 키(android/app/debug.keystore, 모든 빌드에서 같은 키)로 서명한다.
+#   빌드마다 서명이 같아 새 APK를 지우지 않고 덮어 설치할 수 있다(데이터 유지). 공개된 키이므로 개인 사이드로드 전용이며,
+#   다른 사람에게 배포하기 전에는 자체 키로 바꾼다(docs/android-install.md §5).
+# - 비밀 값(계정·키·API 키)을 쓰지 않는다. 실제 서비스·AI를 호출하지 않는다.
+# 위치: GitHub 저장소의 .github/workflows/android-apk.yml 로 복사해서 사용한다(ci/README.md).
+name: android-apk
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/core/**'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-check:
+    # 앱을 빌드하기 전에 core 검사(포맷·린트·타입·테스트·추적성)가 통과해야 한다
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  build-android:
+    needs: core-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - name: 앱 타입 검사
+        run: npx tsc --noEmit
+      - name: Expo prebuild (android 폴더 생성)
+        run: npx expo prebuild --platform android --clean --no-install
+        env:
+          CI: '1'
+      - name: Release 빌드
+        # Gradle이 실패하면 반드시 이 단계가 실패해야 한다(실패를 가리는 `|| true` 금지).
+        working-directory: apps/mobile/android
+        run: |
+          GX=0
+          ./gradlew --no-daemon assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a > ../gradle.log 2>&1 || GX=$?
+          grep -E "^e: |error:|FAILURE|BUILD SUCCESSFUL|MediaSessionsModule" ../gradle.log | head -n 80 || true
+          tail -n 5 ../gradle.log
+          if [ "$GX" -ne 0 ]; then
+            echo "::error::Gradle 실패(종료 코드 $GX). 실패 시 gradle-log 아티팩트를 확인한다."
+            exit "$GX"
+          fi
+          grep -q 'BUILD SUCCESSFUL' ../gradle.log
+      - name: APK 검사(모듈·알림 리스너·JS 번들·권한)
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK" || { echo "::error::APK 없음"; exit 1; }
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          "$BT/aapt2" dump xmltree "$APK" --file AndroidManifest.xml > manifest.txt
+          grep -q 'expo.modules.nowplaying.LyricsNotificationListener' manifest.txt || { echo "::error::알림 리스너 서비스가 매니페스트에 없음"; exit 1; }
+          grep -q 'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE' manifest.txt || { echo "::error::알림 리스너 권한 설정 없음"; exit 1; }
+          if grep -q 'android.permission.SYSTEM_ALERT_WINDOW' manifest.txt; then echo "::error::막아야 할 권한(SYSTEM_ALERT_WINDOW)이 남아 있음"; exit 1; fi
+          unzip -l "$APK" | grep -q 'assets/index.android.bundle' || { echo "::error::JS 번들(index.android.bundle)이 APK에 없음"; exit 1; }
+          "$BT/apksigner" verify --print-certs "$APK" | head -n 5
+          grep -E 'package=|versionName|versionCode' manifest.txt | head -n 5 || true
+          du -h "$APK"
+      - name: APK 이름 붙이기
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          cp android/app/build/outputs/apk/release/app-release.apk "LyricsCompanion-${VERSION}-${GITHUB_RUN_NUMBER}-android.apk"
+          ls -la *.apk
+      - uses: actions/upload-artifact@v6
+        with:
+          name: lyrics-companion-android-apk
+          path: apps/mobile/*.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: 실패 시 빌드 로그 보관
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: gradle-log
+          path: apps/mobile/gradle.log
+          retention-days: 7
+          if-no-files-found: ignore

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   PositionFilter,
-  sameIosTrack,
+  sameServiceTrack,
   type PlaybackAccess,
   type PlaybackSnapshot,
   type ServiceTrackRef,
@@ -10,10 +10,11 @@ import {
 import type { AppServices } from '../services';
 
 /**
- * 화면 표시 중 재조회 간격. Music 앱은 탐색(seek) 알림이 없을 수 있어 짧게 다시 읽어 위치를 맞춘다.
+ * 화면 표시 중 재조회 간격. iPhone Music 앱은 탐색(seek) 알림이 없을 수 있어 짧게 다시 읽어 위치를 맞춘다.
  * 측정이 많을수록 PositionFilter가 "가장 덜 늦은" 측정을 고르기 쉬워진다(D-25). 호출은 가볍다.
+ * Android MediaSession은 탐색·상태 변경마다 알림이 오고 위치를 갱신 시각 기준으로 계산하므로 덜 자주 읽어도 된다(D-41).
  */
-const POLL_MS = 250;
+const POLL_MS = Platform.OS === 'android' ? 500 : 250;
 
 /** 화면을 다시 그려야 하는 변화(위치 값 자체는 ref로만 전달해 매 측정마다 다시 그리지 않는다) */
 function visibleKey(s: PlaybackSnapshot | null): string {
@@ -22,9 +23,10 @@ function visibleKey(s: PlaybackSnapshot | null): string {
 }
 
 /**
- * Music 앱 재생 상태 훅(Apple Music 전용, docs/plan.md D-17).
- * - 곡 변경·재생 상태 알림을 받고, 화면이 보이는 동안 0.5초마다 위치를 다시 읽는다.
+ * 재생 앱 상태 훅(iPhone: Music 앱, Android: Spotify·YouTube Music·Apple Music 앱 — D-17, D-41).
+ * - 곡 변경·재생 상태 알림을 받고, 화면이 보이는 동안 주기적으로 위치를 다시 읽는다.
  * - 앱이 백그라운드면 조회하지 않고, 돌아오면 즉시 다시 읽는다(오래된 측정값으로 진행을 꾸며내지 않음).
+ * - 돌아올 때 권한도 다시 확인한다(Android는 설정 앱에서 알림 접근을 켜고 돌아온다).
  */
 export function usePlayback(services: AppServices) {
   const { playback, session } = services;
@@ -47,7 +49,7 @@ export function usePlayback(services: AppServices) {
         setSnapshot(snap);
       }
       const track = snap?.track ?? null;
-      if (!sameIosTrack(lastTrack.current, track)) {
+      if (!sameServiceTrack(lastTrack.current, track)) {
         lastTrack.current = track;
         if (track) void session.onTrackChanged(track);
       }
@@ -67,11 +69,21 @@ export function usePlayback(services: AppServices) {
   useEffect(() => {
     if (!playback) return;
     let cancelled = false;
-    void playback.access().then((a) => {
-      if (!cancelled) setAccess(a);
+    const check = () => {
+      playback.access().then(
+        (a) => {
+          if (!cancelled) setAccess(a);
+        },
+        () => undefined,
+      );
+    };
+    check();
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') check();
     });
     return () => {
       cancelled = true;
+      sub.remove();
     };
   }, [playback]);
 

@@ -148,7 +148,8 @@ idle → resolving → (needs-confirmation → [confirm|reject]) → loading-lyr
 - 원문 TXT 내보내기(D-29): core `lyricsToPlainText`·`plainTextFileName` → `adapters/text-export.ts`(캐시에 쓰고 공유 시트, 끝나면 삭제).
 - 수동 싱크(D-28): `SyncRecordScreen`(버튼 onPressIn 순간의 `estimatePositionMs`를 기록, 되돌리기 시 3초 앞으로 이동) → `NowPlayingSession.saveUserTiming`/`clearUserTiming`. 줄 탭 이동은 `session.lineStartMs(i)`(기록이 있으면 기록 시각).
 - 지금 재생 하단: 자주 쓰지 않는 기능(가사 바꾸기·번역 입력·발음 고치기·원문 txt·싱크 기록·되돌리기)은 "도구" 버튼 안에 모았다. 시간 정보 없는 가사면 "싱크 직접 기록"을 바로 보인다.
-- 남은 것: Android 모듈(Kotlin, Phase 6), TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제(Phase 4).
+- Android(2026-10-14, D-41): 아래 §15. 화면은 같은 파일을 쓰고 `services.android`가 있을 때만 갈라진다(권한 안내 `AndroidAccess.tsx`, 플레이리스트 탭 `QueueScreen.tsx`, 검색 탭의 앱 고르기·검색 재생, 지금 재생 헤더의 앱 이름).
+- 남은 것: TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제(Phase 4).
 
 ## §14 PC 확장 프로그램 (`apps/pc-extension`, Windows Chrome/Edge — 2026-10-06, D-36)
 ```
@@ -173,3 +174,25 @@ idle → resolving → (needs-confirmation → [confirm|reject]) → loading-lyr
 - **데모**: `npm run demo` — 가짜 재생기·합성 가사·메모리 저장소로 화면만 확인(네트워크 없음, 확장 프로그램에 포함되지 않음, `.tmp/pc-demo`).
 - **빌드**: esbuild(IIFE, chrome116) → `dist/`. sql.js 브라우저 빌드를 복사(eval 없음, CSP `wasm-unsafe-eval`만 추가). 아이콘은 `build.mjs`가 직접 그린 PNG. 매니페스트 `key`로 확장 프로그램 ID 고정(`ggohabnpccimkbiclbehihpgiocjedhd`, 보안 저장소 도우미의 `allowed_origins`).
 - 남은 것: 실제 Apple Music 웹 연동 확인(MV-PC-01), 보관함 플레이리스트 목록(웹 플레이어 대기열로 대신함), 확장 프로그램 패키징(.crx)·스토어 배포(배포 전 권리 검토, D-07).
+
+## §15 Android 재생 앱 연동 (`apps/mobile` Android, Spotify·YouTube Music·Apple Music — 2026-10-14, D-41)
+```
+[Spotify · YouTube Music · Apple Music 앱] ── MediaSession ──▶ MediaSessionManager.getActiveSessions(알림 리스너 자격)
+  modules/now-playing/android  MediaSessionsModule.kt (Expo 모듈 'AndroidMediaSessions')
+    · 세 앱 세션만 남김 → MediaMetadata·PlaybackState·읽은 시각(elapsedRealtime) 원시 값
+    · 변경 콜백(세션 목록·곡·상태·재생 목록) → 'onChange'(값 없이 "바뀜"만)
+    · TransportControls(재생·일시정지·탐색·이전/다음·재생 목록 곡), 셔플(compat 사용자 지정 동작), 검색 재생
+  LyricsNotificationListener.kt  알림 콜백은 비워 둠(알림 내용 미사용)
+        │
+  src/adapters/android-playback-source.ts  AndroidMediaPlayback(PlaybackSource + 제어 + 재생 목록 + 검색 재생)
+        │ core: pickAndroidSession → mapAndroidSnapshot / mapAndroidQueue (playback/android-media-session.ts)
+  usePlayback(PositionFilter, 0.5초 재조회) → NowPlayingSession   ← iPhone·PC와 같은 core
+```
+- **판단 로직은 iPhone 앱과 같은 core**. Android 전용 core 코드는 값 해석 `playback/android-media-session.ts` 하나(AT-23, unit/android-media-session).
+- **재생 위치**: 앱은 위치를 매 순간 갱신하지 않으므로 PlaybackState 정의대로 `position + (읽은 시각 − 갱신 시각) × 속도`를 네이티브가 읽은 순간 기준으로 계산하고, 측정 시각은 JS가 응답 받은 시각(뒤처질 수는 있어도 앞서가지 않음, D-25). position -1·오래된 상태·곡 길이 초과는 위치 모름(불변조건 5).
+- **곡 식별**: `service`는 앱으로 정한다(spotify / youtube-music / apple-music). 곡 ID는 Spotify·YouTube Music만, Android Apple Music은 메타데이터 지문(같은 서비스의 iPhone 스토어 ID와 섞이지 않게). 서비스가 다르면 같은 제목이어도 곡 변경으로 본다(`sameServiceTrack`). 다른 서비스의 같은 곡은 기존 후보 확인(§6 ③).
+- **여러 앱**: 재생 중인 앱을 따르고, 둘 다 재생 중이면 지금 따르는 앱을 유지, 모두 멈추면 따르던 앱 유지. 제어·재생 목록·검색 재생은 따르는 앱으로 보낸다.
+- **플레이리스트 탭**: `MediaController.getQueue()` → `mapAndroidQueue`(지금 재생과 같은 곡 정보 규칙) → iPhone "플레이리스트 안" 화면 모양(재생·셔플·곡부터 재생·`PlaylistLyricsBatchPanel`·`TranslationBundlePanel`). 일괄 작업 키는 `queue:<패키지>:<곡 수>:<해시>`.
+- **검색 탭**: `ItunesCatalogClient.search`로 곡 정보를 찾고 고른 앱에 `playFromSearch`(세션이 지원하면 앱 전환 없음) 또는 `MEDIA_PLAY_FROM_SEARCH` 인텐트. 실제 재생된 곡은 다시 미디어 세션으로 식별한다.
+- **권한·매니페스트**: 알림 리스너 서비스(`BIND_NOTIFICATION_LISTENER_SERVICE`), `<queries>` 세 앱. app.json `blockedPermissions`로 SYSTEM_ALERT_WINDOW·저장소·진동 제거. 보안 저장소는 expo-secure-store(Android Keystore, 자동 백업 제외 규칙).
+- **빌드**: GitHub Actions `ci/android-apk.yml`(D-42) — prebuild → `assembleRelease` → APK 검사 → 아티팩트. 서명은 템플릿 디버그 키(덮어 설치 가능, 개인용).

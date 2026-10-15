@@ -22,9 +22,10 @@
 ## §3 권한 (최소 권한)
 | 권한 | 플랫폼 | 용도 | 원칙 |
 |---|---|---|---|
-| 알림 접근(Notification Listener) | Android | `MediaSessionManager.getActiveSessions` 사용 조건 | 사용 이유를 먼저 설명 후 설정 화면으로 안내. 거부 시 수동 모드. **알림 텍스트·발신자 등 알림 내용은 읽지 않고 저장·전송하지 않는다.** 서비스 구현은 `onNotificationPosted`를 비워 두고 세션 조회만 한다. |
+| 알림 접근(Notification Listener) | Android | `MediaSessionManager.getActiveSessions` 사용 조건 | 사용 이유를 먼저 설명 후 설정 화면으로 안내. 거부 시 수동 모드. **알림 텍스트·발신자 등 알림 내용은 읽지 않고 저장·전송하지 않는다.** 서비스 구현은 `onNotificationPosted`를 비워 두고 세션 조회만 한다. **구현(2026-10-14, D-41)**: `LyricsNotificationListener`는 콜백이 비어 있고, `MediaSessionsModule`은 Spotify·YouTube Music·Apple Music 세션만 남겨 그 밖의 앱 미디어 정보도 읽지 않는다. 저장소 쓰기·로그에는 재생 정보 원시 값을 남기지 않는다. |
 | 미디어 라이브러리/Apple Music | iOS | `systemMusicPlayer` 상태 조회·제어 | 사용 설명 문구에 목적 명시 |
-| 다른 앱 위에 표시 | Android | 오버레이(별도 기능) | 기본 비활성, MV-OVL-01 후 결정 |
+| 다른 앱 위에 표시 | Android | 오버레이(별도 기능) | 기본 비활성, MV-OVL-01 후 결정. 앱 매니페스트에서 `SYSTEM_ALERT_WINDOW`를 제거해 둔다(app.json `blockedPermissions`, 2026-10-14) |
+| 설치 앱 확인(`<queries>`) | Android | Spotify·YouTube Music·Apple Music 설치 여부·앱 열기·검색 재생 | 세 패키지만 선언. `QUERY_ALL_PACKAGES` 쓰지 않음 |
 | 네트워크 | 공통 | LRCLIB, 사용자 AI 제공자 | HTTPS만 |
 | 파일 선택 | 공통 | TXT/LRC 가져오기 | 시스템 파일 선택기로 사용자가 고른 파일만 |
 

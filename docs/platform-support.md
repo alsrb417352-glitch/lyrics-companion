@@ -8,15 +8,15 @@
   - **실기기 확인**: 실제 기기에서 확인(현재 0건)
 - 원칙: 모든 OS·서비스에서 같은 방식으로 현재 곡과 재생 위치를 읽을 수 있다고 가정하지 않는다. 자동 연동이 안 되면 **수동 흐름**(곡 검색·선택 + 수동 싱크)으로 동작해야 한다.
 
-> **범위(2026-10-04, docs/plan.md D-17): Apple Music 전용.** 아래 Spotify·YouTube Music 행은 조사 기록으로만 남긴다(지원 안 함).
+> **범위(2026-10-14 사용자 요청으로 변경, docs/plan.md D-41)**: iPhone = Music 앱(Apple Music), **Android = Spotify·YouTube Music·Apple Music 앱(OS MediaSession)**, Windows PC = Apple Music 웹(D-36). iPhone의 Spotify·YouTube Music은 공개 OS API가 없어 계속 지원하지 않는다(§2.5). 이전 범위: 2026-10-04 Apple Music 전용(D-17).
 
 ## 1. 요약 매트릭스
 
 | 조합 | 현재 곡 정보 | 재생 위치·상태·곡 변경 | 재생 제어 | 방식 | 근거 상태 | 실기기 |
 |---|---|---|---|---|---|---|
-| Android × Apple Music | 제목·아티스트·앨범·길이 기대, 서비스 곡 ID는 앱 정의(없을 수 있음), ISRC 없음 | 위치·속도·마지막 갱신 시각·상태, 세션 변경 콜백 | 세션이 허용한 명령(`getActions`) | OS MediaSession + 알림 리스너 권한 | 문서 확인(OS API) / 앱별 제공 필드는 미확인 | 미확인 |
-| Android × Spotify | 위와 같음 | 위와 같음 | 위와 같음 | OS MediaSession(권장). Spotify SDK는 정책 위험으로 보류 | 문서 확인(OS API) / 정책 검토 필요 | 미확인 |
-| Android × YouTube Music | 위와 같음 | 위와 같음 | 위와 같음 | OS MediaSession | 문서 확인(OS API) / 앱 동작 미확인 | 미확인 |
+| Android × Apple Music | 제목·아티스트·앨범·길이 기대, 서비스 곡 ID는 앱 정의(없을 수 있음 — 형식 미확인이라 **곡 ID로 쓰지 않음**, D-41), ISRC 없음 | 위치·속도·마지막 갱신 시각·상태, 세션 변경 콜백 | 세션이 허용한 명령(`getActions`) | **OS MediaSession + 알림 리스너 권한(구현, D-41)** | 문서 확인(OS API) / 앱별 제공 필드는 미확인 | 미확인 |
+| Android × Spotify | 위와 같음. MEDIA_ID `spotify:track:<ID>`로 알려짐 → 곡 ID로 사용(광고·팟캐스트 제외) | 위와 같음 | 위와 같음 + 재생 목록(대기열)·검색 재생 | **OS MediaSession(구현, D-41)**. Spotify SDK·Web API는 쓰지 않음(D-04) | 문서 확인(OS API) / 앱 제공 값·정책 미확인 | 미확인 |
+| Android × YouTube Music | 위와 같음. MEDIA_ID가 11자 동영상 ID 형식이면 곡 ID로 사용, 뮤직비디오 제목 표기 정리 | 위와 같음 | 위와 같음 | **OS MediaSession(구현, D-41)** | 문서 확인(OS API) / 앱 동작 미확인 | 미확인 |
 | iOS × Apple Music | `nowPlayingItem`(제목·아티스트·앨범·길이·스토어 ID) | `playbackState`, 곡 변경 알림, `currentPlaybackTime` 조회 | 재생·일시정지·다음/이전·대기열 설정(우리 앱에서 곡 선택 가능) | MediaPlayer `systemMusicPlayer` / MusicKit `SystemMusicPlayer` | 문서 일부 | 미확인 |
 | **Windows × Apple Music 웹**(Chrome/Edge, 2026-10-06 추가) | MusicKit JS `nowPlayingItem`(제목·가수·앨범·길이·카탈로그 ID·**ISRC**) | `playbackState`·이벤트, 위치는 `<audio>`의 `currentTime`(MusicKit 값은 정수 초) | 재생·일시정지·탐색·이전/다음·대기열 위치 재생 | 브라우저 확장 프로그램(페이지 MAIN world 스크립트) | **페이지에서 직접 확인**(구조·값 정밀도, 로그인 안 한 미리듣기) / 로그인 재생·장시간 동작은 미확인 | 미확인 |
 | iOS × Spotify | 공개 OS API 없음. Spotify iOS SDK(App Remote)로 가능하나 **정책상 싱크 금지 위험** | 같음 | 같음 | **수동 흐름 기본**, SDK는 권리 검토 후 결정 | 문서 확인(정책) | 미확인 |
@@ -81,6 +81,23 @@ music.apple.com 페이지(로그인 없이 한국 storefront)를 내장 브라�
 - **권한·정책**: 확장 프로그램은 `https://music.apple.com/*` 페이지 스크립트로 지금 재생·대기열 값만 읽고 재생 명령만 보낸다. Apple 계정 정보·Music User Token·개발자 토큰을 읽거나 Apple API를 따로 호출하지 않는다. 웹 플레이어 내부 객체를 읽는 방식이 Apple Music 이용약관상 허용되는지는 **미확인**(§5 MV-LEGAL-01에 추가).
 - **대안 검토**: Electron 등 별도 데스크톱 앱에 웹 플레이어를 넣으면 Widevine DRM이 없어 전체 곡 재생이 안 됨(castlabs 빌드·VMP 서명 필요) → 기각. Windows 미디어 세션(SMTC)으로 브라우저 재생 정보를 읽는 방식은 곡 ID·ISRC가 없고 위치 갱신 정밀도가 불확실 → 보류.
 
+### 2.9 Android 구현(2026-10-14, D-41)
+- **네이티브 모듈**: `apps/mobile/modules/now-playing/android`(Kotlin, Expo 모듈 `AndroidMediaSessions`). `MediaSessionManager.getActiveSessions(알림 리스너)`로 세션을 얻되 **Spotify(`com.spotify.music`)·YouTube Music(`com.google.android.apps.youtube.music`)·Apple Music(`com.apple.android.music`)** 세 앱만 남기고, 그 밖의 앱 세션은 값을 읽지도 넘기지도 않는다. 알림 리스너 서비스(`LyricsNotificationListener`)는 자격용으로만 등록하고 알림 콜백은 비워 둔다.
+- **넘기는 값(원시)**: MediaMetadata(TITLE·ARTIST·ALBUM_ARTIST·ALBUM·DURATION·MEDIA_ID), PlaybackState(state·position·lastPositionUpdateTime·playbackSpeed·actions), 읽은 순간의 `SystemClock.elapsedRealtime()`(마지막에 읽음), 재생 목록 이름.
+- **해석(core `playback/android-media-session.ts`, 테스트 고정)**
+  - 위치: 재생 중이면 `position + (읽은 시각 − 갱신 시각) × 속도`(PlaybackState의 정의). position이 -1이면 위치 모름. 갱신 시각을 모르거나 미래면 경과 0(뒤처질 수는 있어도 앞서가지 않음). 경과 6시간 초과·곡 길이 3초 초과는 오래된 상태로 보고 위치 모름. JS는 응답 받은 시각을 측정 시각으로 쓴다(D-25와 같은 원칙).
+  - 상태: PLAYING→재생, PAUSED→일시정지, NONE/STOPPED/ERROR→정지, BUFFERING·CONNECTING·건너뛰는 중·빨리 감기→버퍼링(진행 추정 안 함).
+  - 곡 ID: Spotify `spotify:track:<22자>`의 ID, YouTube Music 11자 ID 형식만. **Android Apple Music 앱의 MEDIA_ID는 형식을 확인하지 못해 쓰지 않는다** — iPhone·PC와 같은 `apple-music` 서비스라 다른 뜻의 숫자를 스토어 ID로 쓰면 백업을 옮겼을 때 다른 곡에 연결될 수 있다(불변조건 6). 대신 메타데이터 지문으로 식별.
+  - 노래가 아닌 항목: Spotify MEDIA_ID가 `spotify:ad:`·`episode:`·`show:`·`audiobook:`·`chapter:`면 곡이 아님(가사 조회·AI 없음).
+  - YouTube Music 동영상: 가수의 " - Topic"(" - 주제")와 제목의 "(Official Music Video)"·"[MV]"·"【公式】" 같은 동영상 표기, "가수 - 제목"의 앞 가수, "가수「제목」"을 정리한다. **Live·Remix 등 녹음 버전 표시는 지우지 않는다**.
+  - 따를 세션: 재생 중인 지원 앱(지금 따르는 앱이 그중에 있으면 유지, 아니면 목록 첫째) → 모두 멈췄으면 따르던 앱 유지.
+- **변경 알림**: `addOnActiveSessionsChangedListener` + 세션마다 `MediaController.Callback`(곡·상태·재생 목록 변경). 이벤트는 "바뀌었다"만 보내고 JS가 다시 읽는다. 화면 표시 중에는 0.5초마다 재조회(Android는 탐색 때도 상태 변경 알림이 오므로 iPhone의 0.25초보다 길게).
+- **재생 제어**: `TransportControls` play·pause·seekTo·skipToNext/Previous·skipToQueueItem. 셔플은 프레임워크 API에 없어 androidx MediaSessionCompat의 사용자 지정 동작(`android.support.v4.media.session.action.SET_SHUFFLE_MODE`)으로 보낸다(앱이 지원할 때만 효과).
+- **플레이리스트 탭 = 재생 목록(대기열)**: Spotify·YouTube Music은 플레이리스트 목록을 읽는 공개 OS API가 없다(Spotify Web API는 D-04 정책 위험, YouTube Music은 공식 API 없음). 그래서 iPhone "플레이리스트 안" 화면 모양 그대로 `MediaController.getQueue()`(지금 재생 목록)를 보여 주고, 곡부터 재생·가사 원문 일괄 받기·번역 묶음을 같은 core 기능으로 제공한다(PC 대기열 탭과 같은 방식). 항목은 지금 재생과 같은 규칙으로 곡 정보를 만들어 Spotify·YouTube Music은 같은 곡 ID로 연결된다. 재생 목록 항목에는 길이가 없을 수 있다.
+- **검색 탭**: 곡 정보 검색(iTunes Search)으로 고른 곡을 고른 앱에 "검색해서 재생"으로 보낸다 — 세션이 `ACTION_PLAY_FROM_SEARCH`를 지원하면 `playFromSearch`(앱 전환 없음), 아니면 표준 인텐트 `MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH`(그 앱이 열림). 앱이 검색 결과에서 곡을 고르므로 다른 버전이 재생될 수 있으나 가사는 실제 재생된 곡 정보로 찾는다. 보관함 검색은 Android에 공개 API가 없어 두지 않는다.
+- **권한**: 알림 접근(사용자가 설정에서 켬, Android 13+ 사이드로드는 "제한된 설정 허용" 필요 가능), `<queries>`로 세 앱만 설치 여부 확인. 다른 앱 위에 그리기·저장소·진동 권한은 `blockedPermissions`로 제거.
+- **실기기 미확인**(MV-PB-AND-01~03): 앱별 MEDIA_ID 실제 형식, 위치 갱신 빈도·오차, 재생 목록 제공 여부, 검색 재생·셔플 동작, 제조사 배터리 최적화.
+
 ### 2.5 iOS × Spotify / YouTube Music (지원 안 함, D-17)
 - 다른 앱의 재생 정보를 읽는 공개 OS API가 없음(`MPNowPlayingInfoCenter`는 자기 앱 정보 게시용). 비공개 프레임워크는 사용하지 않는다.
 - Spotify iOS SDK(App Remote)는 기술적으로 가능하나 위 정책 문제 + 일시정지 후 연결 끊김 보고 → **기본은 수동 흐름**.
@@ -104,9 +121,9 @@ API를 쓸 수 있다는 것과 배포·표시 권리가 있다는 것은 다르
 |---|---|---|
 | LRCLIB 가사 | 가사 텍스트의 저작권은 권리자에게 있음. LRCLIB 문서에 이용 조건 명시 없음. 앱 배포 시 가사 표시·기기 저장 허용 범위 | 미확인 |
 | AI 번역 | 가사 번역물은 2차적 저작물 가능성. 사용자 기기 내 개인 이용과 공유·배포의 차이. AI 제공자 약관(입력 데이터 사용, 출력 권리) | 미확인 |
-| Spotify | Developer Policy(싱크 금지·타 서비스 콘텐츠 통합 금지·AI 입력 금지), 사용자 약관 | 위험 확인, 해석 미확인 |
+| Spotify | Developer Policy(싱크 금지·타 서비스 콘텐츠 통합 금지·AI 입력 금지) — Android 구현은 Spotify Platform(SDK·Web API)을 쓰지 않고 OS MediaSession만 읽는다(D-41). 사용자 약관상 다른 앱이 재생 정보를 읽어 가사를 맞추는 것이 허용되는지 | 위험 확인, 해석 미확인 |
 | Apple Music / MusicKit | Apple Developer Program 약관, Apple Music 식별 자산(로고·명칭) 사용 지침 | 미확인 |
-| YouTube Music | 서비스 약관 | 미확인 |
+| YouTube Music | 서비스 약관(Android MediaSession으로 재생 정보를 읽는 것) | 미확인 |
 | 앱 스토어 | 알림 리스너·오버레이 권한 사용 정책(Google Play), App Review 지침 | 미확인 |
 | iTunes Search API | 홍보·제휴 목적 API의 이용 조건, 호출 제한(약 분당 20회로 알려짐, 미확인) | 미확인 |
 | Apple Music 웹 플레이어(PC 확장 프로그램) | 페이지의 MusicKit 객체·오디오 요소 값을 확장 프로그램이 읽고 재생을 제어하는 것이 서비스 약관상 허용되는지, 크롬 웹 스토어 정책(배포 시) | 미확인 |
@@ -118,3 +135,4 @@ API를 쓸 수 있다는 것과 배포·표시 권리가 있다는 것은 다르
 - 사용자 PC는 Windows, **Mac 없음**. iOS 빌드에는 macOS + Xcode가 필요(Expo SDK 57, Xcode 26.4+) → **GitHub Actions `macos-26` 러너**(2026-07 이미지 기준 Xcode 26.6 기본)에서 무서명 IPA를 만들고, Windows의 Sideloadly가 무료 Apple ID로 서명·설치한다([ADR-0002](decisions/ADR-0002-ios-without-mac.md), [설치 안내](ios-install.md)).
 - 무료 Apple ID 서명 제약: 7일 유효, 동시 설치 3개, MusicKit App Service 등 일부 기능(App ID 서비스) 사용 불가 → MusicKit 카탈로그 API 대신 iTunes Search API + MediaPlayer 사용(§2.6).
 - Android Gradle 빌드는 **비ASCII 경로**(예: `노래가사앱(로컬)`)에서 문제가 날 수 있음 → ASCII 가상 드라이브로 빌드 권장: `subst L: "E:\ai data\노래가사앱(로컬)"` 후 `L:\`에서 빌드. (core 검사 `npm run check`는 한글 경로에서 동작하도록 만들었음)
+- **Android APK는 GitHub Actions `ubuntu-latest`에서 빌드**(D-42, `ci/android-apk.yml`): 이 PC에는 JDK·Android SDK가 없고, Linux 러너에는 SDK·NDK가 미리 설치되어 있으며 한글 경로 문제도 없다. 설치는 [android-install.md](android-install.md).

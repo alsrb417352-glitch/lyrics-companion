@@ -1,0 +1,17 @@
+// Android 재생 앱 연동 모듈(MediaSession). 구현: src/main/java/expo/modules/nowplaying/MediaSessionsModule.kt
+// expo-module-gradle-plugin이 Kotlin·compileSdk·expo-modules-core 의존성을 붙인다(추가 라이브러리 없음).
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'dev.lyricscompanion'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.nowplaying"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}

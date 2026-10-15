@@ -17,7 +17,7 @@
   "requirements": [
     {
       "id": "REQ-APP-01",
-      "title": "Apple Music(Music 앱)이 재생하고 우리 앱은 현재 곡 가사를 자동 싱크로 보여주는 보조 앱으로 동작",
+      "title": "Apple Music(iPhone Music 앱·PC 웹)과 Android Spotify·YouTube Music·Apple Music 앱이 재생하고, 우리 앱은 현재 곡 가사를 자동 싱크로 보여주는 보조 앱으로 동작",
       "core": "n/a",
       "app": "partial",
       "design": "docs/architecture.md §1",
@@ -25,7 +25,8 @@
         "packages/core/src/ports.ts",
         "apps/mobile/src/services.ts",
         "apps/mobile/src/ui/Root.tsx",
-        "apps/mobile/README.md"
+        "apps/mobile/README.md",
+        "apps/mobile/src/adapters/android-playback-source.ts"
       ],
       "manual": ["MV-UI-01"]
     },
@@ -41,7 +42,10 @@
         "packages/core/src/playback/ios-system-player.ts",
         "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
         "apps/mobile/src/adapters/ios-playback-source.ts",
-        "apps/mobile/src/ui/usePlayback.ts"
+        "apps/mobile/src/ui/usePlayback.ts",
+        "packages/core/src/playback/android-media-session.ts",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/MediaSessionsModule.kt",
+        "apps/mobile/src/adapters/android-playback-source.ts"
       ],
       "manual": ["MV-IOS-INSTALL-01", "MV-PB-AND-01", "MV-PB-AND-02", "MV-PB-IOS-01"]
     },
@@ -55,7 +59,8 @@
         "packages/core/src/session/now-playing-session.ts",
         "packages/core/src/lyrics/lrclib-client.ts",
         "packages/core/src/lyrics/apple-music-lyrics-provider.ts",
-        "apps/mobile/src/ui/LyricsPicker.tsx"
+        "apps/mobile/src/ui/LyricsPicker.tsx",
+        "apps/mobile/src/ui/AndroidAccess.tsx"
       ],
       "manual": ["MV-PB-IOS-02"]
     },
@@ -68,9 +73,11 @@
       "implementation": [
         "packages/core/src/ports.ts",
         "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
-        "apps/mobile/src/ui/NowPlayingScreen.tsx"
+        "apps/mobile/src/ui/NowPlayingScreen.tsx",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/MediaSessionsModule.kt",
+        "apps/mobile/src/adapters/android-playback-source.ts"
       ],
-      "manual": ["MV-PB-CTL-01"]
+      "manual": ["MV-PB-CTL-01", "MV-PB-AND-03"]
     },
     {
       "id": "REQ-PB-04",
@@ -90,9 +97,10 @@
       "implementation": [
         "packages/core/src/catalog/itunes-catalog.ts",
         "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
-        "apps/mobile/src/ui/SearchScreen.tsx"
+        "apps/mobile/src/ui/SearchScreen.tsx",
+        "apps/mobile/src/adapters/android-playback-source.ts"
       ],
-      "manual": ["MV-PB-IOS-03"]
+      "manual": ["MV-PB-IOS-03", "MV-PB-AND-03"]
     },
     {
       "id": "REQ-PB-06",
@@ -108,6 +116,44 @@
         "apps/mobile/src/ui/Root.tsx"
       ],
       "manual": ["MV-PB-IOS-04"]
+    },
+    {
+      "id": "REQ-PB-07",
+      "title": "Android에서 Spotify·YouTube Music·Apple Music 앱의 현재 곡·재생 위치·상태 자동 감지와 재생 제어(OS 미디어 세션 + 알림 접근 권한, 알림 내용 미사용, 지원하지 않는 앱 세션 미사용, 광고·팟캐스트 제외, 위치를 모르면 진행 표시 안 함)",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-41, docs/platform-support.md §2.9, docs/architecture.md §15",
+      "implementation": [
+        "packages/core/src/playback/android-media-session.ts",
+        "packages/core/src/playback/musickit-web.ts",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/MediaSessionsModule.kt",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/LyricsNotificationListener.kt",
+        "apps/mobile/modules/now-playing/android/src/main/AndroidManifest.xml",
+        "apps/mobile/modules/now-playing/index.ts",
+        "apps/mobile/src/adapters/android-playback-source.ts",
+        "apps/mobile/src/ui/usePlayback.ts",
+        "apps/mobile/src/ui/AndroidAccess.tsx",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx",
+        "ci/android-apk.yml",
+        "docs/android-install.md"
+      ],
+      "manual": ["MV-AND-INSTALL-01", "MV-PB-AND-01", "MV-PB-AND-02", "MV-PB-CTL-01"]
+    },
+    {
+      "id": "REQ-PB-08",
+      "title": "Android 플레이리스트 탭 = 재생 앱의 지금 재생 목록(곡부터 재생·셔플·가사 원문 일괄 받기·번역 묶음, 지금 재생과 같은 곡 식별), 검색 탭 = 고른 재생 앱에 검색 재생 요청",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-41, docs/platform-support.md §2.9",
+      "implementation": [
+        "packages/core/src/playback/android-media-session.ts",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/MediaSessionsModule.kt",
+        "apps/mobile/src/adapters/android-playback-source.ts",
+        "apps/mobile/src/ui/QueueScreen.tsx",
+        "apps/mobile/src/ui/SearchScreen.tsx",
+        "apps/mobile/src/ui/Root.tsx"
+      ],
+      "manual": ["MV-PB-AND-03"]
     },
     {
       "id": "REQ-LY-01",
@@ -164,9 +210,10 @@
         "packages/core/src/playback/ios-library.ts",
         "apps/mobile/src/services.ts",
         "apps/mobile/src/ui/PlaylistsScreen.tsx",
-        "apps/mobile/src/ui/PlaylistLyricsBatchPanel.tsx"
+        "apps/mobile/src/ui/PlaylistLyricsBatchPanel.tsx",
+        "apps/mobile/src/ui/QueueScreen.tsx"
       ],
-      "manual": ["MV-LY-01"]
+      "manual": ["MV-LY-01", "MV-PB-AND-03"]
     },
     {
       "id": "REQ-LY-06",
@@ -513,7 +560,8 @@
         "packages/core/src/batch/translation-bundle.ts",
         "apps/mobile/src/adapters/text-export.ts",
         "apps/mobile/src/ui/TranslationBundlePanel.tsx",
-        "apps/mobile/src/ui/PlaylistsScreen.tsx"
+        "apps/mobile/src/ui/PlaylistsScreen.tsx",
+        "apps/mobile/src/ui/QueueScreen.tsx"
       ],
       "manual": ["MV-ED-03"]
     },
@@ -619,10 +667,16 @@
     {
       "id": "REQ-SEC-06",
       "title": "재생 감지에 필요 없는 알림 내용·사용자 데이터 저장·전송 금지",
-      "core": "n/a",
-      "app": "not-started",
+      "core": "partial",
+      "app": "partial",
       "design": "docs/security.md 권한",
-      "implementation": ["docs/security.md"],
+      "implementation": [
+        "docs/security.md",
+        "packages/core/src/playback/android-media-session.ts",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/LyricsNotificationListener.kt",
+        "apps/mobile/modules/now-playing/android/src/main/java/expo/modules/nowplaying/MediaSessionsModule.kt",
+        "apps/mobile/modules/now-playing/android/src/main/AndroidManifest.xml"
+      ],
       "manual": ["MV-PB-AND-01", "MV-SEC-01"]
     },
     {
@@ -784,6 +838,10 @@
     {
       "id": "AT-22",
       "title": "가사 직접 등록: LRCLIB에 없는 곡에 LRC·일반 가사를 등록하면 표시(시간은 입력 값 그대로), 재시작 후 LRCLIB·AI 호출 0회, 이전 판본·내 번역 보존, 같은 내용 재등록은 새 판본 없음, 틀린 LRC·곡 없음은 저장 안 함, 가사 속 지시문 불이행"
+    },
+    {
+      "id": "AT-23",
+      "title": "Android 미디어 세션: Spotify·YouTube Music 원시 값으로 현재 행 계산(갱신 시각 기준 위치), 위치 모름·버퍼링·광고·지원하지 않는 앱은 진행·곡을 꾸며내지 않음, iPhone 백업을 가져온 Android에서 같은 곡은 후보 확인 뒤 내 번역 표시(LRCLIB·AI 0회), 라이브 영상은 다른 녹음, 재생 목록 일괄 받기 후 재생 시 재조회 없음"
     }
   ]
 }

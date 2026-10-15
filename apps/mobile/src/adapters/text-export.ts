@@ -3,7 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { lyricsToPlainText, plainTextFileName, type LyricsVersion } from '@lyrics-companion/core';
 
 /**
- * TXT 파일 내보내기·고르기(iOS).
+ * TXT 파일 내보내기·고르기(iOS·Android, UTI 옵션은 iOS에서만 쓰인다).
  * 내용·파일 이름은 core가 만들고, 여기서는 파일을 쓰고 공유 시트를 열거나 파일 선택기로 읽기만 한다.
  * 사용자가 공유 시트에서 "파일에 저장"·메모·ChatGPT 등 보낼 곳을 고른다. 앱이 직접 외부로 보내지 않는다.
  * 공유가 끝나면 캐시 사본을 지운다. 고른 파일은 바꾸거나 지우지 않는다.
