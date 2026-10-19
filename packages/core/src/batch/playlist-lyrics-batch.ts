@@ -1,6 +1,6 @@
 import type { CancelSignal, Clock, IdGenerator, ServiceTrackRef } from '../ports.js';
 import type { LyricsKind, Song } from '../model.js';
-import { buildLyricsVersion } from '../lyrics/lyrics-version.js';
+import { buildFetchedLyrics } from '../lyrics/fetched-lyrics.js';
 import type { LyricsProvider } from '../lyrics/lyrics-provider.js';
 import { decideMatch, parseTitle, serviceKeyOf } from '../matching/track-identity.js';
 import type { Logger } from '../security/logger.js';
@@ -291,18 +291,17 @@ export class PlaylistLyricsBatch {
           // 조회하는 동안 지금 재생 화면이 같은 곡의 가사를 저장했으면 덮지 않는다.
           song = (await this.deps.store.getSong(song.id)) ?? song;
           if (song.activeLyricsVersionId) return { kind: 'result', status: 'already-saved', songId: song.id };
-          const v = buildLyricsVersion({
-            id: this.deps.ids.next('lv'),
+          // 가사에 함께 들어 있던 한국어 뜻·발음(D-43)도 판본과 같이 저장(AI 호출 없음)
+          const built = buildFetchedLyrics({
+            res,
             songId: song.id,
-            source: 'lrclib',
-            sourceRef: res.sourceRef,
-            kind: res.kind,
-            ...(res.kind === 'synced' ? { timed: res.timed } : {}),
-            ...(res.kind === 'plain' ? { plain: res.plain } : {}),
-            hasWordTimingSource: res.hasWordTiming,
+            ids: this.deps.ids,
             createdAtEpochMs: this.deps.clock.nowEpochMs(),
           });
-          await this.deps.store.saveLyricsVersion(v, { activate: true });
+          await this.deps.store.saveLyricsVersion(built.version, {
+            activate: true,
+            embedded: { translation: built.translation, pronunciation: built.pronunciation },
+          });
           return { kind: 'result', status: 'saved', songId: song.id, lyricsKind: res.kind };
         }
         case 'not_found': {

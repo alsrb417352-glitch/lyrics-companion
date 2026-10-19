@@ -213,6 +213,7 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
         services={services}
         theme={theme}
         initialQuery={s.song.title}
+        song={s.song}
         durationMs={s.song.durationMs}
         candidates={s.lyricsCandidates}
         hasCurrentLyrics={s.lyrics !== null}
@@ -408,7 +409,13 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           <View style={{ marginTop: 6 }}>
             {s.translationStatus === 'pending' ? <Note theme={theme}>번역 중…</Note> : null}
             {s.translationStatus === 'available' && s.translation ? (
-              <Note theme={theme}>{s.translation.origin === 'user' ? '내가 저장한 번역' : '저장된 AI 번역'}</Note>
+              <Note theme={theme}>
+                {s.translation.origin === 'user'
+                  ? '내가 저장한 번역'
+                  : s.translation.origin === 'ai'
+                    ? '저장된 AI 번역'
+                    : '가사에 포함된 번역(가사 출처에 함께 있던 한국어 뜻)'}
+              </Note>
             ) : null}
             {msg && s.translationStatus !== 'available' && s.translationStatus !== 'pending' ? (
               <Note theme={theme} tone={s.lastOutcome?.kind === 'failed' ? 'danger' : 'dim'}>
@@ -424,6 +431,16 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                   onPress={() =>
                     void session.requestTranslation(unknownPending ? { acknowledgeUnknownOutcome: true } : {})
                   }
+                  style={{ marginRight: 8 }}
+                />
+              ) : null}
+              {s.translation?.origin === 'lyrics' && s.translationStatus !== 'pending' ? (
+                // 가사에 포함된 번역 대신 AI 번역을 원할 때(명시 요청만, 결과는 새 AI 버전 — 불변조건 4·D-43)
+                <Button
+                  theme={theme}
+                  icon="cloud"
+                  label={unknownPending ? '확인했어요 — AI 번역 다시 요청' : 'AI 번역 받기'}
+                  onPress={() => void session.retranslate(unknownPending ? { acknowledgeUnknownOutcome: true } : {})}
                   style={{ marginRight: 8 }}
                 />
               ) : null}

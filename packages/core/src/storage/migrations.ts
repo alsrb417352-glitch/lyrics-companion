@@ -129,6 +129,47 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE INDEX idx_user_timings_lv ON user_timings(lyrics_version_id)`,
     ],
   },
+  {
+    version: 4,
+    description:
+      "번역·발음 출처에 'lyrics'(가사에 함께 들어 있던 한국어 뜻·발음, D-43) 추가 — 표를 새로 만들어 기존 행을 seq까지 그대로 옮김",
+    statements: [
+      `CREATE TABLE translations_v4 (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL UNIQUE,
+        lyrics_version_id TEXT NOT NULL REFERENCES lyrics_versions(id),
+        origin TEXT NOT NULL CHECK (origin IN ('user','ai','lyrics')),
+        lines_json TEXT NOT NULL,
+        source_text_hash TEXT NOT NULL,
+        provider_id TEXT,
+        model TEXT,
+        prompt_version TEXT,
+        created_at INTEGER NOT NULL
+      )`,
+      `INSERT INTO translations_v4(seq,id,lyrics_version_id,origin,lines_json,source_text_hash,provider_id,model,prompt_version,created_at)
+        SELECT seq,id,lyrics_version_id,origin,lines_json,source_text_hash,provider_id,model,prompt_version,created_at FROM translations`,
+      `DROP TABLE translations`,
+      `ALTER TABLE translations_v4 RENAME TO translations`,
+      `CREATE INDEX idx_translations_lv ON translations(lyrics_version_id)`,
+      `CREATE TABLE pronunciations_v4 (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL UNIQUE,
+        lyrics_version_id TEXT NOT NULL REFERENCES lyrics_versions(id),
+        origin TEXT NOT NULL CHECK (origin IN ('user','ai','lyrics')),
+        lines_json TEXT NOT NULL,
+        source_text_hash TEXT NOT NULL,
+        provider_id TEXT,
+        model TEXT,
+        prompt_version TEXT,
+        created_at INTEGER NOT NULL
+      )`,
+      `INSERT INTO pronunciations_v4(seq,id,lyrics_version_id,origin,lines_json,source_text_hash,provider_id,model,prompt_version,created_at)
+        SELECT seq,id,lyrics_version_id,origin,lines_json,source_text_hash,provider_id,model,prompt_version,created_at FROM pronunciations`,
+      `DROP TABLE pronunciations`,
+      `ALTER TABLE pronunciations_v4 RENAME TO pronunciations`,
+      `CREATE INDEX idx_pronunciations_lv ON pronunciations(lyrics_version_id)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

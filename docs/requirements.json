@@ -182,7 +182,8 @@
       "implementation": [
         "packages/core/src/matching/track-identity.ts",
         "packages/core/src/session/now-playing-session.ts",
-        "packages/core/src/lyrics/apple-music-lyrics-provider.ts"
+        "packages/core/src/lyrics/apple-music-lyrics-provider.ts",
+        "packages/core/src/lyrics/lyrics-ranking.ts"
       ],
       "manual": ["MV-PB-IOS-02"]
     },
@@ -230,6 +231,41 @@
         "apps/pc-extension/src/ui/LyricsPicker.tsx"
       ],
       "manual": ["MV-LY-02"]
+    },
+    {
+      "id": "REQ-LY-07",
+      "title": "가사 후보 우선순위(D-43): ① 재생 중인 곡과 맞는지(제목·녹음 버전·길이 ±2초 + 가수 확인, 가수가 다르면 자동 적용 없이 후보) ② 싱크 가사 ③ 원문 가사(곡 원어 문자) ④ 한국어 뜻 ⑤ 한글 발음 순서로 자동 조회·일괄 받기·가사 고르기 목록에 같은 순위 적용",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-43, docs/architecture.md §5",
+      "implementation": [
+        "packages/core/src/lyrics/lyrics-ranking.ts",
+        "packages/core/src/lyrics/apple-music-lyrics-provider.ts",
+        "apps/mobile/src/ui/LyricsPicker.tsx",
+        "apps/pc-extension/src/ui/LyricsPicker.tsx"
+      ],
+      "manual": ["MV-LY-03"]
+    },
+    {
+      "id": "REQ-LY-08",
+      "title": "가사에 원문과 번갈아 들어 있는 한국어 뜻·한글 발음 줄을 구조가 확실할 때만 나눠 원문 줄에 붙이고 '가사에 포함된' 번역·발음(origin lyrics)으로 판본과 한 번에 저장(원문 시간 유지, AI 자동 호출 없음, 표시 순서 내 번역 → AI → 가사 포함, 백업 포함)",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-43, docs/architecture.md §5·§7·§11",
+      "implementation": [
+        "packages/core/src/lyrics/embedded-korean.ts",
+        "packages/core/src/lyrics/fetched-lyrics.ts",
+        "packages/core/src/lyrics/lyrics-provider.ts",
+        "packages/core/src/storage/migrations.ts",
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/translation/selection.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "packages/core/src/batch/playlist-lyrics-batch.ts",
+        "packages/core/src/backup/backup-file.ts",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx",
+        "apps/pc-extension/src/ui/NowPlaying.tsx"
+      ],
+      "manual": ["MV-LY-03"]
     },
     {
       "id": "REQ-SY-01",
@@ -392,10 +428,10 @@
     },
     {
       "id": "REQ-TR-04",
-      "title": "가사 선택 우선순위: 사용자 번역 → 저장된 AI 번역 → 원문 → 조건 충족 시 신규 AI 번역",
+      "title": "번역 선택 우선순위: 사용자 번역 → 저장된 AI 번역 → 가사에 포함된 번역(D-43) → 원문 → 조건 충족 시 신규 AI 번역",
       "core": "verified",
       "app": "not-started",
-      "design": "docs/architecture.md §11",
+      "design": "docs/architecture.md §11, docs/plan.md D-43",
       "implementation": [
         "packages/core/src/translation/selection.ts",
         "packages/core/src/translation/translation-service.ts"
@@ -842,6 +878,10 @@
     {
       "id": "AT-23",
       "title": "Android 미디어 세션: Spotify·YouTube Music 원시 값으로 현재 행 계산(갱신 시각 기준 위치), 위치 모름·버퍼링·광고·지원하지 않는 앱은 진행·곡을 꾸며내지 않음, iPhone 백업을 가져온 Android에서 같은 곡은 후보 확인 뒤 내 번역 표시(LRCLIB·AI 0회), 라이브 영상은 다른 녹음, 재생 목록 일괄 받기 후 재생 시 재조회 없음"
+    },
+    {
+      "id": "AT-24",
+      "title": "가사에 포함된 한국어 뜻·발음: 원문/발음/뜻이 번갈아 적힌 합성 싱크 가사 → 원문 줄만 가사(원문 시간·간주 빈 줄 유지), 뜻·발음은 '가사에 포함된' 번역·발음으로 표시, 자동 번역 켜짐에도 AI 0회, 재시작 후 네트워크 0회, 표시 순서 내 번역 → 직접 요청한 AI → 가사 포함(가사 포함 번역 보존), 일괄 받기·백업 가져오기도 같음, v3→v4 마이그레이션 seq 유지, 다른 판본·출처로는 저장 거부(원자적)"
     }
   ]
 }

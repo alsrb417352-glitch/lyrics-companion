@@ -52,7 +52,9 @@
 
 ## §5 가사 조회 (LRCLIB)
 - `LrclibClient`: 식별 헤더(`User-Agent`, `Lrclib-Client`), 순차 큐 + 최소 간격(기본 300ms), 429/503 `Retry-After` 동안 네트워크 요청 없이 `rate_limited` 반환, Content-Type·크기·필드 검증, HTTPS만 허용.
-- `/api/get`만 자동 사용한다(LRCLIB가 길이 ±2초로 맞춰 줌). `/api/search`는 수동 선택 화면에서만(결과는 사용자가 고름).
+- 자동 조회(`AppleMusicLyricsProvider`, iPhone·PC·Android 공통): ① Music 앱 표기로 `/api/get`(LRCLIB가 제목·가수·길이 ±2초를 맞춰 줌) ② 못 찾았고 스토어 ID가 있으면 iTunes Lookup의 jp·us·kr 표기로 `/api/get` ③ 가수까지 맞는 레코드를 찾았으면 그 표기(제목+가수)로 `/api/search` 1회 더 — 같은 곡의 다른 업로드 비교용(실패해도 이미 찾은 것으로 정함). 가장 나은 것이 아직 "싱크 + 원문"이 아니면(로마자 싱크·시간 정보 없는 가사 등) 스토어 ID의 다른 나라 표기도 얻어 표기마다 제목+가수로 검색 ④ 아무것도 못 찾았으면 제목으로 `/api/search`(길이 ±2초·버전·제목이 맞는 것만). 이보다 나을 수 없는 레코드(같은 곡·싱크·원문·뜻·발음)를 찾으면 바로 멈춘다.
+- **가사 후보 순위**(`rankLyricsRecords`, D-43 사용자 결정): ① 곡 일치 — `same`(제목·버전 태그·길이 ±2초 + 가수 확인: `/api/get` 결과 또는 알려진 가수 표기) > `probable`(가수 표기만 다름 → 자동 적용 없이 후보) > `mismatch`(자동·후보 제외, 직접 검색 목록 맨 아래) ② 싱크 가사(파싱 성공) ③ 원문 가사(곡 원어 문자: 일본어 곡이면 가나·한자 줄이 원문 줄의 20% 이상 — 로마자·번역만 있으면 원문 없음, 한국어 곡이면 한글, 그 밖은 한글 아닌 글자. 곡 언어는 곡 정보의 가나·곡이 맞는 후보 내용으로 추정) ④ 한국어 뜻 ⑤ 한글 발음(④⑤는 가사에 원문과 번갈아 들어 있는 한국어 줄이 원문 줄의 절반 이상에 붙어 있을 때) ⑥ 같으면 다른 언어 줄(로마자·외국어 번역)이 번갈아 끼지 않은 것 → 길이 차이 → 레코드 ID. 연주곡 버전을 재생 중이면 ① 다음에 연주곡 레코드를 앞에. 가사 고르기 화면(iPhone·PC)도 같은 순위로 정렬하고 `summarizeLyricsCandidate` 문구(있는 것·경고·첫 원문 줄)를 보인다.
+- **가사에 포함된 한국어 줄 나누기**(`splitEmbeddedKorean`, D-43): 원문 줄 대부분(일본어 70%·그 밖 90% 이상)이 같은 개수(1~2개)의 한국어 줄을 바로 뒤(또는 앞)에 달고 있을 때만 나눈다. 일본어 원문이면 원문 가나의 한글 독음 음절이 순서대로 들어 있는지(최장 공통 부분열 50% 이상) + 일본어 독음 음절 모양(70% 이상)으로 발음을 가리고, 곡 전체 다수결로 "몇 번째 줄이 발음인지"를 정한다(갈리면 나누지 않음). 일본어가 아닌 원문은 8줄 이상·한 줄씩 붙은 경우만 뜻으로. 원문 줄 시간·빈 줄(간주·끝 시각)은 그대로 두고 한국어 줄 시간은 쓰지 않는다(불변조건 5). 어느 원문에도 붙지 않은 한국어 줄(머리말 등)은 버린다. 나눈 뜻·발음은 `buildFetchedLyrics`가 origin `lyrics` 번역·발음 버전으로 만들어 `saveLyricsVersion(..., { embedded })`로 판본과 한 트랜잭션에 저장한다(세션·일괄 받기·직접 고르기 모두).
 - `classifyLrclibRecord`: `instrumental` → 연주곡 / `syncedLyrics` 파싱 성공 → 싱크 / 실패 + `plainLyrics` → 일반(알림 `invalid-synced`) / 실패만 → 오류(저장 안 함) / 둘 다 없음 → 없음.
 - 받은 레코드가 버전 태그·길이(±2초)와 맞지 않으면 사용하지 않는다(`incompatible-version`).
 - 같은 곡에 저장본이 있으면 **LRCLIB를 다시 조회하지 않는다**(오프라인 우선). 원문 갱신은 사용자 요청 기능(Phase 5).
@@ -64,14 +66,14 @@
 - 알 수 없는 괄호 내용은 제목 일부로 남겨 보수적으로 비교(잘못된 연결보다 새 곡 생성이 안전). 리마스터·feat.·explicit 표기는 같은 녹음으로 본다.
 
 ## §7 저장소와 데이터 모델
-SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v3 — v3에서 `user_timings` 추가). 앱에서는 **앱 문서 영역**(캐시 아님)에 DB 파일을 둔다.
+SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v4 — v3에서 `user_timings` 추가, v4에서 번역·발음 `origin`에 `lyrics` 추가: 표를 새로 만들어 기존 행을 `seq`까지 그대로 옮김). 앱에서는 **앱 문서 영역**(캐시 아님)에 DB 파일을 둔다.
 
 | 테이블 | 내용 | 규칙 |
 |---|---|---|
 | songs | 내부 곡(녹음) | `active_lyrics_version_id`는 사용자 확인 또는 최초 저장 시에만 변경 |
 | service_tracks | (서비스, 서비스 키) → 곡 | `linked_by`: created / isrc / user |
 | lyrics_versions | 불변 가사 판본: `lines_json`(행 ID·텍스트·시작 ms), `text_hash`, `content_hash`, 출처 | 수정 없음. 원문이 다르면 새 판본 |
-| translations | 번역 버전(`origin` user/ai, 행 ID→번역, 생성 당시 `source_text_hash`, 제공자·모델·프롬프트 버전) | 추가만 함(덮어쓰기 없음). `seq`로 최신 판단 |
+| translations | 번역 버전(`origin` user/ai/lyrics, 행 ID→번역, 생성 당시 `source_text_hash`, 제공자·모델·프롬프트 버전 — lyrics는 `lrclib`·`lrclib:<id>`·`embedded-ko/v1`) | 추가만 함(덮어쓰기 없음). `seq`로 최신 판단 |
 | pronunciations | 발음 버전(행 ID→{kana, hangul}) | 위와 같음 |
 | sync_offsets | 곡별 보정값(ms) | ±30초로 제한 |
 | user_timings | 사용자가 탭으로 기록한 행 시작 시각(`kind` timed/cleared, 행 ID→ms) | 추가만 함. 가장 큰 `seq`가 현재 값, `cleared`면 원래 시간. 저장 시 판본 기준 검증 |
@@ -101,9 +103,10 @@ SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v3 — v3에�
 - 검증(`validateTranslationResponse`): 크기 상한, 코드 펜스 허용, JSON 형식, `status`, 행 ID 누락/중복/모르는 ID/순서, 빈 번역, 과도한 길이, 거절 문구(절반 이상), 읽기에 한자 잔존. **번역·읽기를 따로 판정**해 유효한 부분만 저장할 수 있게 하되, 거절 신호가 하나라도 있으면 응답 전체를 버린다.
 
 ## §11 번역 정책과 불변조건 (`TranslationService`)
+표시 선택(`selectTranslation`·`selectPronunciation`): **사용자 → AI → 가사에 포함된 것(lyrics, D-43)** 순서, 같은 출처 안에서는 최신 `seq`. 가사에 포함된 번역이 있으면 INV-1로 AI를 자동으로 부르지 않으므로, 그 위에 AI 번역이 보이는 것은 사용자가 "AI 번역 받기"(`retranslate`)를 직접 누른 경우뿐이다. 사용자 번역은 일부 행만 있어도 AI·가사 포함 번역으로 보완하지 않는다.
 | ID | 불변조건 | 강제 위치 | 검증 |
 |---|---|---|---|
-| INV-1 | 저장된 번역(사용자·AI)이 있으면 `ensureTranslation`은 제공자를 호출하지 않는다 | `ensureTranslation` 첫 단계 | AT-01, AT-02, AT-03 |
+| INV-1 | 저장된 번역(사용자·AI·가사에 포함된 번역)이 있으면 `ensureTranslation`은 제공자를 호출하지 않는다 | `ensureTranslation` 첫 단계 | AT-01, AT-02, AT-03, AT-24 |
 | INV-2 | 모델·프롬프트·제공자 변경은 기존 번역을 무효화하지 않는다(재생성 경로 없음) | 선택 로직이 provenance를 보지 않음 | AT-01 |
 | INV-3 | 사용자 번역은 부분이어도 AI로 보완·수정하지 않는다 | `selectTranslation` + 추가 전용 저장 | AT-03, AT-06 |
 | INV-4 | 발음이 없다는 이유로 번역을 재생성하지 않는다. 발음은 `requestPronunciation`(명시 요청)으로만 | 작업 종류 분리 | AT-12 |

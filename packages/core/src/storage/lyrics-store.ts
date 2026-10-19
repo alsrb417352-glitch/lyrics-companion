@@ -10,6 +10,7 @@ import type {
   Provenance,
   Song,
   TranslationJob,
+  TranslationOrigin,
   TranslationSettings,
   TranslationVersion,
   UserTimingVersion,
@@ -38,7 +39,7 @@ import {
 export interface NewTranslation {
   id: string;
   lyricsVersionId: string;
-  origin: 'user' | 'ai';
+  origin: TranslationOrigin;
   lines: Record<string, string>;
   sourceTextHash: string;
   provenance: Provenance | null;
@@ -48,7 +49,7 @@ export interface NewTranslation {
 export interface NewPronunciation {
   id: string;
   lyricsVersionId: string;
-  origin: 'user' | 'ai';
+  origin: TranslationOrigin;
   lines: Record<string, PronunciationLine>;
   sourceTextHash: string;
   provenance: Provenance | null;
@@ -226,8 +227,24 @@ export class LyricsStore {
 
   // ------------------------------------------------------------ 가사 판본
 
-  /** 판본 저장 + (선택) 활성 판본 지정을 원자적으로 */
-  async saveLyricsVersion(v: LyricsVersion, opts: { activate: boolean }): Promise<void> {
+  /**
+   * 판본 저장 + (선택) 활성 판본 지정을 원자적으로.
+   * embedded: 가사에 함께 들어 있던 한국어 뜻·발음(origin 'lyrics', D-43)을 같은 트랜잭션으로 저장한다
+   * (판본만 저장되고 뜻·발음이 빠지는 중간 상태가 없게 — 그 상태에서 자동 번역이 돌면 AI를 부르게 됨).
+   */
+  async saveLyricsVersion(
+    v: LyricsVersion,
+    opts: {
+      activate: boolean;
+      embedded?: { translation: NewTranslation | null; pronunciation: NewPronunciation | null };
+    },
+  ): Promise<void> {
+    const extra = opts.embedded;
+    for (const x of [extra?.translation, extra?.pronunciation]) {
+      if (x && (x.origin !== 'lyrics' || x.lyricsVersionId !== v.id)) {
+        throw new Error('가사에 포함된 번역·발음은 같은 판본의 lyrics 출처로만 저장합니다');
+      }
+    }
     await this.q.run(() =>
       inTransaction(this.db, async () => {
         await this.db.run(
@@ -247,6 +264,8 @@ export class LyricsStore {
             v.createdAtEpochMs,
           ],
         );
+        if (extra?.translation) await this.insertTranslation(extra.translation);
+        if (extra?.pronunciation) await this.insertPronunciation(extra.pronunciation);
         if (opts.activate) {
           await this.db.run('UPDATE songs SET active_lyrics_version_id = ? WHERE id = ?', [v.id, v.songId]);
         }
@@ -338,7 +357,7 @@ export class LyricsStore {
 
   private static toTranslation(r: Row): TranslationVersion {
     const origin = str(r['origin']);
-    if (origin !== 'user' && origin !== 'ai') throw new Error('origin 형식 오류');
+    if (origin !== 'user' && origin !== 'ai' && origin !== 'lyrics') throw new Error('origin 형식 오류');
     return {
       id: str(r['id']),
       lyricsVersionId: str(r['lyrics_version_id']),
@@ -353,7 +372,7 @@ export class LyricsStore {
 
   private static toPronunciation(r: Row): PronunciationVersion {
     const origin = str(r['origin']);
-    if (origin !== 'user' && origin !== 'ai') throw new Error('origin 형식 오류');
+    if (origin !== 'user' && origin !== 'ai' && origin !== 'lyrics') throw new Error('origin 형식 오류');
     return {
       id: str(r['id']),
       lyricsVersionId: str(r['lyrics_version_id']),
@@ -696,7 +715,7 @@ export class LyricsStore {
     };
   }
 
-  /** 곡에 저장된 번역·발음의 가치: 사용자 것 2, AI 것만 1, 없음 0 */
+  /** 곡에 저장된 번역·발음의 가치: 사용자 것 2, AI·가사 제공 것만 1, 없음 0 */
   private async songValue(songId: string): Promise<number> {
     const r = await this.db.get<Row>(
       `SELECT MAX(CASE origin WHEN 'user' THEN 2 ELSE 1 END) AS v FROM (

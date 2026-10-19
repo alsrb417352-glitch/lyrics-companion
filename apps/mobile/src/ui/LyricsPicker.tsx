@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { parseLrc, type LrclibRecord } from '@lyrics-companion/core';
+import {
+  rankLyricsRecords,
+  summarizeLyricsCandidate,
+  type LrclibRecord,
+  type RankedLyricsRecord,
+} from '@lyrics-companion/core';
 import type { AppServices } from '../services';
 import { Button, Note } from './common';
 import { ManualLyricsEntry } from './ManualLyricsEntry';
@@ -11,25 +16,19 @@ function mmss(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function firstLine(r: LrclibRecord): string {
-  if (r.instrumental) return '연주곡';
-  if (r.syncedLyrics) {
-    const p = parseLrc(r.syncedLyrics);
-    if (p.ok) return p.lines.find((l) => l.text.trim())?.text ?? '';
-  }
-  return (r.plainLyrics ?? '').split('\n').find((l) => l.trim()) ?? '';
-}
-
 /**
  * 가사 고르기: 자동 조회가 확정하지 못한 후보 + LRCLIB 직접 검색.
  * 사용자가 고른 레코드만 현재 곡에 적용한다(같은 녹음인지 사용자가 확인, 불변조건 6).
- * 길이가 2초 넘게 다르면 다른 녹음일 수 있어 경고한다(싱크가 어긋날 수 있음).
+ * 목록은 자동 조회와 같은 순위(곡 일치 → 싱크 → 원문 → 한국어 뜻 → 한글 발음, D-43)로 정렬하고
+ * 레코드마다 무엇이 있는지와 곡이 다를 수 있다는 경고(길이 ±2초 초과·제목/버전 다름·가수 표기 다름)를 보여 준다.
  * 검색으로도 못 찾으면 "가사 직접 등록"(TXT/LRC 파일·붙여넣기, D-40)으로 넘어간다.
  */
 export function LyricsPicker(props: {
   services: AppServices;
   theme: Theme;
   initialQuery: string;
+  /** 지금 곡(순위·경고 계산용) */
+  song: { title: string; artist: string; album: string | null };
   durationMs: number | null;
   candidates: LrclibRecord[];
   /** 지금 표시 중인 가사가 있는지(직접 등록 화면 안내용) */
@@ -41,7 +40,12 @@ export function LyricsPicker(props: {
   const { services, theme } = props;
   const [manual, setManual] = useState(props.startManual ?? false);
   const [term, setTerm] = useState(props.initialQuery);
-  const [rows, setRows] = useState<LrclibRecord[]>(props.candidates);
+  const [records, setRecords] = useState<LrclibRecord[]>(props.candidates);
+  const { title, artist, album } = props.song;
+  const rows = useMemo<RankedLyricsRecord[]>(
+    () => rankLyricsRecords(records, { variants: [{ title, artist, album }], durationMs: props.durationMs }),
+    [records, title, artist, album, props.durationMs],
+  );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(
     props.candidates.length > 0 ? '자동으로 확정하지 못한 후보입니다. 지금 듣는 곡과 같은 가사를 골라 주세요.' : null,
@@ -55,7 +59,7 @@ export function LyricsPicker(props: {
     const r = await services.lrclib.search({ q });
     setBusy(false);
     if (r.status === 'ok') {
-      setRows(r.records);
+      setRecords(r.records);
       if (r.records.length === 0)
         setMsg(
           '찾지 못했습니다. 제목만, 또는 일본어 원제로 검색해 보세요. 그래도 없으면 아래 "가사 직접 등록"으로 넣을 수 있습니다.',
@@ -117,32 +121,29 @@ export function LyricsPicker(props: {
       </View>
       <FlatList
         data={rows}
-        keyExtractor={(r) => String(r.id)}
+        keyExtractor={(r) => String(r.record.id)}
         renderItem={({ item }) => {
-          const diffSec = props.durationMs == null ? null : Math.round(item.duration - props.durationMs / 1000);
-          const far = diffSec !== null && Math.abs(diffSec) > 2;
+          const rec = item.record;
+          const sum = summarizeLyricsCandidate(item, props.durationMs);
           return (
             <Pressable
               accessibilityRole="button"
-              onPress={() => void choose(item)}
+              onPress={() => void choose(rec)}
               style={({ pressed }) => [styles.item, { borderColor: theme.border, opacity: pressed ? 0.6 : 1 }]}
             >
               <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }} numberOfLines={1}>
-                {item.trackName}
+                {rec.trackName}
               </Text>
               <Text style={{ color: theme.textDim, fontSize: 14 }} numberOfLines={1}>
-                {item.artistName}
-                {item.albumName ? ` · ${item.albumName}` : ''} · {mmss(item.duration)}
-                {item.syncedLyrics ? ' · 싱크 가사' : item.instrumental ? '' : ' · 시간 정보 없음'}
+                {rec.artistName}
+                {rec.albumName ? ` · ${rec.albumName}` : ''} · {mmss(rec.duration)}
               </Text>
-              {far ? (
-                <Text style={{ color: theme.danger, fontSize: 13 }}>
-                  재생 중인 곡과 길이가 {diffSec! > 0 ? '+' : ''}
-                  {diffSec}초 달라요 — 다른 버전일 수 있어 싱크가 어긋날 수 있습니다
-                </Text>
-              ) : null}
+              <Text style={{ color: theme.textDim, fontSize: 13 }} numberOfLines={1}>
+                {sum.features}
+              </Text>
+              {sum.warning ? <Text style={{ color: theme.danger, fontSize: 13 }}>{sum.warning}</Text> : null}
               <Text style={{ color: theme.textFaint, fontSize: 14 }} numberOfLines={1}>
-                {firstLine(item)}
+                {sum.preview}
               </Text>
             </Pressable>
           );

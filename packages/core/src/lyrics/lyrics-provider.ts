@@ -1,7 +1,9 @@
 import type { CancelSignal } from '../ports.js';
 import { isLyricsRecordCompatible } from '../matching/track-identity.js';
-import { parseLrc, parsePlainLyrics, type TimedText } from './lrc.js';
+import type { EmbeddedKorean } from './embedded-korean.js';
+import type { TimedText } from './lrc.js';
 import type { LrclibClient, LrclibRecord } from './lrclib-client.js';
+import { readLrclibRecord, type LrclibRecordContent } from './lyrics-ranking.js';
 
 /** 가사 제공자 포트. LRCLIB 외 다른 소스를 추가할 때 같은 인터페이스를 구현한다. */
 export interface LyricsQuery {
@@ -21,6 +23,8 @@ export type LyricsFetchResult =
       sourceRef: string;
       hasWordTiming: boolean;
       notices: LyricsNotice[];
+      /** 가사에 원문과 번갈아 들어 있던 한국어 뜻·발음(timed 순번 기준). 없으면 null(D-43) */
+      embedded?: EmbeddedKorean | null;
     }
   | {
       status: 'found';
@@ -29,6 +33,8 @@ export type LyricsFetchResult =
       sourceRef: string;
       hasWordTiming: false;
       notices: LyricsNotice[];
+      /** 가사에 원문과 번갈아 들어 있던 한국어 뜻·발음(plain 순번 기준). 없으면 null(D-43) */
+      embedded?: EmbeddedKorean | null;
     }
   | { status: 'found'; kind: 'instrumental'; sourceRef: string; hasWordTiming: false; notices: LyricsNotice[] }
   | {
@@ -48,34 +54,46 @@ export interface LyricsProvider {
   fetch(query: LyricsQuery, signal?: CancelSignal): Promise<LyricsFetchResult>;
 }
 
-/** LRCLIB 레코드를 가사 상태(싱크/일반/연주곡/없음/잘못됨)로 분류한다. */
-export function classifyLrclibRecord(rec: LrclibRecord): LyricsFetchResult {
+/**
+ * LRCLIB 레코드를 가사 상태(싱크/일반/연주곡/없음/잘못됨)로 분류한다.
+ * 원문과 번갈아 적힌 한국어 뜻·발음 줄은 구조가 확실할 때만 원문에서 빼서 embedded로 돌려준다(D-43).
+ * @param content 이미 해석한 내용(순위 계산 결과)이 있으면 다시 해석하지 않는다.
+ */
+export function classifyLrclibRecord(
+  rec: LrclibRecord,
+  content: LrclibRecordContent = readLrclibRecord(rec),
+): LyricsFetchResult {
   const sourceRef = `lrclib:${rec.id}`;
-  if (rec.instrumental) return { status: 'found', kind: 'instrumental', sourceRef, hasWordTiming: false, notices: [] };
-  const notices: LyricsNotice[] = [];
-  if (rec.syncedLyrics && rec.syncedLyrics.trim() !== '') {
-    const parsed = parseLrc(rec.syncedLyrics);
-    if (parsed.ok) {
-      const hasWord = parsed.hadWordTimings || rec.hasWordSync;
-      if (hasWord) notices.push('word-sync-ignored');
-      return { status: 'found', kind: 'synced', timed: parsed.lines, sourceRef, hasWordTiming: hasWord, notices };
-    }
-    notices.push('invalid-synced');
+  const notices: LyricsNotice[] = content.invalidSynced ? ['invalid-synced'] : [];
+  switch (content.kind) {
+    case 'instrumental':
+      return { status: 'found', kind: 'instrumental', sourceRef, hasWordTiming: false, notices: [] };
+    case 'synced':
+      if (content.hadWordTimings) notices.push('word-sync-ignored');
+      return {
+        status: 'found',
+        kind: 'synced',
+        timed: content.timed,
+        sourceRef,
+        hasWordTiming: content.hadWordTimings,
+        notices,
+        embedded: content.embedded,
+      };
+    case 'plain':
+      return {
+        status: 'found',
+        kind: 'plain',
+        plain: content.plain,
+        sourceRef,
+        hasWordTiming: false,
+        notices,
+        embedded: content.embedded,
+      };
+    case 'invalid':
+      return { status: 'error', kind: 'invalid-lrc', message: '싱크 가사 형식 오류, 일반 가사 없음' };
+    case 'empty':
+      return { status: 'not_found', reason: 'empty' };
   }
-  if (rec.plainLyrics && rec.plainLyrics.trim() !== '') {
-    return {
-      status: 'found',
-      kind: 'plain',
-      plain: parsePlainLyrics(rec.plainLyrics),
-      sourceRef,
-      hasWordTiming: false,
-      notices,
-    };
-  }
-  if (notices.includes('invalid-synced')) {
-    return { status: 'error', kind: 'invalid-lrc', message: '싱크 가사 형식 오류, 일반 가사 없음' };
-  }
-  return { status: 'not_found', reason: 'empty' };
 }
 
 export class LrclibLyricsProvider implements LyricsProvider {

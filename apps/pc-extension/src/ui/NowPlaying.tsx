@@ -181,6 +181,7 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
       <LyricsPicker
         services={services}
         initialQuery={s.song.title}
+        song={s.song}
         durationMs={s.song.durationMs}
         candidates={s.lyricsCandidates}
         hasCurrentLyrics={s.lyrics !== null}
@@ -348,7 +349,13 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
           <div className="stack-sm">
             {s.translationStatus === 'pending' ? <Note>번역 중…</Note> : null}
             {s.translationStatus === 'available' && s.translation ? (
-              <Note>{s.translation.origin === 'user' ? '내가 저장한 번역' : '저장된 AI 번역'}</Note>
+              <Note>
+                {s.translation.origin === 'user'
+                  ? '내가 저장한 번역'
+                  : s.translation.origin === 'ai'
+                    ? '저장된 AI 번역'
+                    : '가사에 포함된 번역(가사 출처에 함께 있던 한국어 뜻)'}
+              </Note>
             ) : null}
             {msg && s.translationStatus !== 'available' && s.translationStatus !== 'pending' ? (
               <Note tone={s.lastOutcome?.kind === 'failed' ? 'danger' : 'dim'}>{msg}</Note>
@@ -361,6 +368,14 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
                   onClick={() =>
                     void session.requestTranslation(unknownPending ? { acknowledgeUnknownOutcome: true } : {})
                   }
+                />
+              ) : null}
+              {s.translation?.origin === 'lyrics' && s.translationStatus !== 'pending' ? (
+                // 가사에 포함된 번역 대신 AI 번역을 원할 때(명시 요청만, 결과는 새 AI 버전 — D-43)
+                <Button
+                  icon="cloud"
+                  label={unknownPending ? '확인했어요 — AI 번역 다시 요청' : 'AI 번역 받기'}
+                  onClick={() => void session.retranslate(unknownPending ? { acknowledgeUnknownOutcome: true } : {})}
                 />
               ) : null}
               {isJa && s.translation && !s.pronunciation && s.translationStatus !== 'pending' ? (

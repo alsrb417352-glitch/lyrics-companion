@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-14T07:49:10.186Z",
+  "startedAt": "2026-10-19T07:54:45.957Z",
   "node": "v24.21.0",
   "platform": "win32-x64",
   "root": "E:\\ai data\\노래가사앱(로컬)\\",
@@ -11,60 +11,60 @@
       "name": "format",
       "label": "포맷(Prettier)",
       "status": "pass",
-      "durationMs": 3302
+      "durationMs": 3782
     },
     {
       "name": "lint",
       "label": "정적 분석(ESLint, 아키텍처 경계 포함)",
       "status": "pass",
-      "durationMs": 5200
+      "durationMs": 6564
     },
     {
       "name": "typecheck",
       "label": "타입 검사(테스트 포함)",
       "status": "pass",
-      "durationMs": 1814
+      "durationMs": 2027
     },
     {
       "name": "test",
       "label": "핵심 테스트(Vitest: 단위·수용, 가짜 제공자·가짜 시계·실제 SQLite)",
       "status": "pass",
-      "durationMs": 16895
+      "durationMs": 18528
     },
     {
       "name": "build",
       "label": "빌드(core, 플랫폼 타입 없이 컴파일)",
       "status": "pass",
-      "durationMs": 1201
+      "durationMs": 1378
     },
     {
       "name": "app",
       "label": "앱 타입 검사(apps/mobile, 의존성 설치 시에만)",
       "status": "pass",
-      "durationMs": 2376
+      "durationMs": 2545
     },
     {
       "name": "pc",
       "label": "PC 확장 프로그램 타입 검사·빌드(apps/pc-extension, 의존성 설치 시에만)",
       "status": "pass",
-      "durationMs": 2180
+      "durationMs": 2437
     },
     {
       "name": "secrets",
       "label": "비밀정보 검사",
       "status": "pass",
-      "durationMs": 154
+      "durationMs": 162
     },
     {
       "name": "trace",
       "label": "요구사항 추적성(요구사항↔테스트↔문서)",
       "status": "pass",
-      "durationMs": 99
+      "durationMs": 92
     }
   ],
   "tests": {
-    "total": 265,
-    "passed": 265,
+    "total": 294,
+    "passed": 294,
     "failed": 0,
     "skipped": 0
   },

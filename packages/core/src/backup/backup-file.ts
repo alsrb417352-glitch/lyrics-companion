@@ -68,8 +68,11 @@ export interface BackupSummary {
   lyricsVersions: number;
   userTranslations: number;
   aiTranslations: number;
+  /** 가사에 포함된 번역(D-43) */
+  lyricsTranslations: number;
   userPronunciations: number;
   aiPronunciations: number;
+  lyricsPronunciations: number;
   userTimings: number;
   exportedAtEpochMs: number;
 }
@@ -201,7 +204,7 @@ function parseTextVersionBase(o: Obj, w: string) {
   return {
     id: id(o['id'], `${w}.id`),
     lyricsVersionId: id(o['lyricsVersionId'], `${w}.lyricsVersionId`),
-    origin: oneOf(o['origin'], ['user', 'ai'] as const, `${w}.origin`),
+    origin: oneOf(o['origin'], ['user', 'ai', 'lyrics'] as const, `${w}.origin`),
     sourceTextHash: text(o['sourceTextHash'], `${w}.sourceTextHash`, 128),
     provenance: parseProvenance(o['provenance'], `${w}.provenance`),
     createdAtEpochMs: int(o['createdAtEpochMs'], `${w}.createdAtEpochMs`, 0, MAX_EPOCH),
@@ -391,8 +394,10 @@ export function parseBackup(raw: string, maxSchemaVersion: number): BackupParseR
         lyricsVersions: lyricsList.length,
         userTranslations: translations.filter((t) => t.origin === 'user').length,
         aiTranslations: translations.filter((t) => t.origin === 'ai').length,
+        lyricsTranslations: translations.filter((t) => t.origin === 'lyrics').length,
         userPronunciations: pronunciations.filter((p) => p.origin === 'user').length,
         aiPronunciations: pronunciations.filter((p) => p.origin === 'ai').length,
+        lyricsPronunciations: pronunciations.filter((p) => p.origin === 'lyrics').length,
         userTimings: userTimings.filter((t) => t.kind === 'timed').length,
         exportedAtEpochMs,
       },

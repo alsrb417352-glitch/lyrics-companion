@@ -22,6 +22,16 @@ const KANJI = /[㐀-䶿一-鿿豈-﫿]/u;
 const HANGUL = /[가-힯ᄀ-ᇿ㄰-㆏]/u;
 const LATIN = /[A-Za-z]/;
 
+/** 행에 한글이 있는지 */
+export function hasHangul(text: string): boolean {
+  return HANGUL.test(text);
+}
+
+/** 행에 가나가 있는지(한자만 있는 행은 중국어일 수 있어 따로 본다) */
+export function hasKana(text: string): boolean {
+  return KANA.test(text);
+}
+
 /** 행에 일본어 문자(가나 또는 한자)가 있는지 */
 export function hasJapaneseScript(text: string): boolean {
   return KANA.test(text) || KANJI.test(text);

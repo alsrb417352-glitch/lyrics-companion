@@ -141,6 +141,9 @@ function BackupSection(props: { services: AppServices }) {
             {fmtDate(pending.summary.exportedAtEpochMs)}에 만든 백업 · 곡 {pending.summary.songs}개 · 내 번역{' '}
             {pending.summary.userTranslations}개 · AI 번역 {pending.summary.aiTranslations}개 · 내 발음{' '}
             {pending.summary.userPronunciations}개 · AI 발음 {pending.summary.aiPronunciations}개
+            {pending.summary.lyricsTranslations + pending.summary.lyricsPronunciations > 0
+              ? ` · 가사에 포함된 번역 ${pending.summary.lyricsTranslations}개 · 발음 ${pending.summary.lyricsPronunciations}개`
+              : ''}
           </Note>
           <Note>
             이 PC에 있는 데이터는 지우거나 바꾸지 않고 없는 것만 추가합니다. 같은 곡이 양쪽에 있으면 내 번역이 있는 쪽을

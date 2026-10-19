@@ -103,12 +103,14 @@ const KR_QUERY = {
 const urls = (w: World) => w.http.calls.map((c) => new URL(c.url).pathname);
 
 describe('Apple Music 가사 자동 조회(현지화 표기 대응)', () => {
-  it('[REQ-LY-03][REQ-PB-01] Music 앱 표기로 바로 찾으면 다른 표기를 조회하지 않는다', async () => {
+  it('[REQ-LY-03][REQ-PB-01][REQ-LY-07] Music 앱 표기로 바로 찾으면 다른 표기를 조회하지 않고, 같은 표기로 한 번만 더 검색해 다른 업로드와 비교한다', async () => {
     const w = world();
     w.getIndex.set('Morning Platform|Synthetic Band KR', rec({ id: 1, trackName: 'Morning Platform' }));
     const r = await provider(w).fetch(KR_QUERY);
     expect(r).toMatchObject({ status: 'found', kind: 'synced', sourceRef: 'lrclib:1' });
-    expect(urls(w)).toEqual(['/api/get']);
+    expect(urls(w)).toEqual(['/api/get', '/api/search']);
+    const search = new URL(w.http.calls[1]!.url).searchParams;
+    expect([search.get('track_name'), search.get('artist_name')]).toEqual(['Morning Platform', 'Synthetic Band KR']);
   });
 
   it('[REQ-LY-03][REQ-PB-01] 한국 표기로 없으면 스토어 ID로 일본 표기를 얻어 다시 찾는다', async () => {
@@ -116,7 +118,7 @@ describe('Apple Music 가사 자동 조회(현지화 표기 대응)', () => {
     w.getIndex.set('夜明けのホーム|合成バンド', rec({ id: 2 }));
     const r = await provider(w).fetch(KR_QUERY);
     expect(r).toMatchObject({ status: 'found', kind: 'synced', sourceRef: 'lrclib:2' });
-    expect(urls(w)).toEqual(['/api/get', '/lookup', '/lookup', '/lookup', '/api/get']);
+    expect(urls(w)).toEqual(['/api/get', '/lookup', '/lookup', '/lookup', '/api/get', '/api/search']);
   });
 
   it('[REQ-LY-03] get이 모두 실패하면 제목 검색에서 알려진 가수 표기·길이·버전이 맞는 레코드를 자동 적용', async () => {
@@ -173,6 +175,120 @@ describe('Apple Music 가사 자동 조회(현지화 표기 대응)', () => {
     expect(r.status).toBe('ok');
     if (r.status === 'ok') expect(r.variants.map((v) => v.artist)).toEqual(['合成バンド']);
     expect(await c.lookup('12a')).toEqual({ status: 'error', kind: 'bad_request' });
+  });
+});
+
+/** 원문/한글 발음/한국어 뜻이 번갈아 적힌 합성 싱크 가사(D-43) */
+const JA = ['夜明けの駅で君を待つ', 'まだねむいまちのなか', '光の中へ走り出す', 'ふたりで空を見上げた'];
+const PRON = [
+  '요아케노 에키데 키미오 마츠',
+  '마다 네무이 마치노 나카',
+  '히카리노 나카에 하시리다스',
+  '후타리데 소라오 미아게타',
+];
+const MEAN = ['새벽 역에서 너를 기다려', '아직 졸린 거리 속', '빛 속으로 달려 나가', '둘이서 하늘을 올려다봤어'];
+const stamp = (i: number) => `[00:${String(10 + i * 5).padStart(2, '0')}.00]`;
+const TRIPLET_LRC = JA.flatMap((o, i) => [`${stamp(i)}${o}`, `${stamp(i)}${PRON[i]}`, `${stamp(i)}${MEAN[i]}`]).join(
+  '\n',
+);
+const MEANING_LRC = JA.flatMap((o, i) => [`${stamp(i)}${o}`, `${stamp(i)}${MEAN[i]}`]).join('\n');
+
+describe('가사 후보 우선순위(D-43): 곡 일치 → 싱크 → 원문 → 한국어 뜻 → 발음', () => {
+  it('[REQ-LY-07] 정확 조회 결과가 시간 정보 없는 가사면, 같은 곡의 싱크 가사 업로드를 골라 쓴다', async () => {
+    const w = world();
+    w.getIndex.set('夜明けのホーム|合成バンド', rec({ id: 70, syncedLyrics: null }));
+    w.searchIndex.set('夜明けのホーム', [
+      rec({ id: 70, syncedLyrics: null }),
+      rec({ id: 71 }),
+      rec({ id: 72, duration: 260 }),
+    ]);
+    const r = await provider(w).fetch({ ...KR_QUERY, title: '夜明けのホーム', artist: '合成バンド', storeId: null });
+    expect(r).toMatchObject({ status: 'found', kind: 'synced', sourceRef: 'lrclib:71' });
+  });
+
+  it('[REQ-LY-07][REQ-LY-08] 싱크·원문이 같으면 한국어 뜻·발음이 들어 있는 업로드를 고르고, 한국어 줄은 원문에서 빼서 함께 돌려준다', async () => {
+    const w = world();
+    w.getIndex.set(
+      '夜明けのホーム|合成バンド',
+      rec({ id: 80, syncedLyrics: JA.map((o, i) => `${stamp(i)}${o}`).join('\n') }),
+    );
+    w.searchIndex.set('夜明けのホーム', [
+      rec({ id: 81, syncedLyrics: MEANING_LRC }),
+      rec({ id: 82, syncedLyrics: TRIPLET_LRC }),
+      rec({ id: 83, syncedLyrics: TRIPLET_LRC, artistName: '다른 표기' }), // 가수 확인 안 됨 → 자동 적용 안 함
+    ]);
+    const r = await provider(w).fetch({ ...KR_QUERY, title: '夜明けのホーム', artist: '合成バンド', storeId: null });
+    expect(r).toMatchObject({ status: 'found', kind: 'synced', sourceRef: 'lrclib:82' });
+    if (r.status !== 'found' || r.kind !== 'synced') return;
+    expect(r.timed.map((l) => l.text)).toEqual(JA);
+    expect(r.timed.map((l) => l.startMs)).toEqual([10_000, 15_000, 20_000, 25_000]);
+    expect(r.embedded?.meaning).toEqual({ 0: MEAN[0], 1: MEAN[1], 2: MEAN[2], 3: MEAN[3] });
+    expect(r.embedded?.pronunciation[2]).toBe(PRON[2]);
+  });
+
+  it('[REQ-LY-07] 찾은 표기의 싱크 가사가 로마자뿐이면(일본어는 시간 정보 없음) 스토어의 다른 표기로도 검색해 싱크 원문을 고른다', async () => {
+    const w = world();
+    const romaji = rec({
+      id: 110,
+      trackName: 'Morning Platform',
+      syncedLyrics: '[00:01.00]ichi gyou me\n[00:05.00]ni gyou me',
+    });
+    const jaPlain = rec({
+      id: 113,
+      trackName: 'Morning Platform',
+      syncedLyrics: null,
+      plainLyrics: 'ひとつめの行\nふたつめの行',
+    });
+    w.getIndex.set('Morning Platform|Synthetic Band KR', romaji);
+    w.searchIndex.set('Morning Platform', [romaji, jaPlain]);
+    w.searchIndex.set('夜明けのホーム', [rec({ id: 111 }), rec({ id: 112, artistName: '모르는 표기' })]);
+    const r = await provider(w).fetch(KR_QUERY);
+    expect(r).toMatchObject({ status: 'found', kind: 'synced', sourceRef: 'lrclib:111' });
+    // get(kr) → search(kr 표기: 로마자 싱크·일본어 비싱크) → lookup ×3 → search(jp 표기)에서 싱크 원문을 찾아 멈춤
+    expect(urls(w)).toEqual(['/api/get', '/api/search', '/lookup', '/lookup', '/lookup', '/api/search']);
+  });
+
+  it('[REQ-LY-07] 찾은 가사가 이미 싱크 원문이면 다른 나라 표기는 조회하지 않는다', async () => {
+    const w = world();
+    w.getIndex.set('Morning Platform|Synthetic Band KR', rec({ id: 120, trackName: 'Morning Platform' }));
+    const r = await provider(w).fetch(KR_QUERY);
+    expect(r).toMatchObject({ status: 'found', sourceRef: 'lrclib:120' });
+    expect(urls(w)).not.toContain('/lookup');
+  });
+
+  it('[REQ-LY-07] 이보다 나을 수 없는 가사(같은 곡·싱크·원문·뜻·발음)를 정확 조회로 찾으면 더 조회하지 않는다', async () => {
+    const w = world();
+    w.getIndex.set('夜明けのホーム|合成バンド', rec({ id: 90, syncedLyrics: TRIPLET_LRC }));
+    const r = await provider(w).fetch({ ...KR_QUERY, title: '夜明けのホーム', artist: '合成バンド' });
+    expect(r).toMatchObject({ status: 'found', sourceRef: 'lrclib:90' });
+    expect(urls(w)).toEqual(['/api/get']);
+  });
+
+  it('[REQ-LY-07][AT-11] 비교용 추가 검색이 요청 한도·오류로 실패해도 이미 찾은 가사를 쓴다', async () => {
+    for (const status of [429, 500]) {
+      const w = world();
+      w.getIndex.set('夜明けのホーム|合成バンド', rec({ id: 95 }));
+      w.http.prepend(
+        (req) => req.url.startsWith('https://lrclib.net/api/search?'),
+        () => ({ status, headers: { 'retry-after': '30' }, bodyText: '' }),
+      );
+      const r = await provider(w).fetch({ ...KR_QUERY, title: '夜明けのホーム', artist: '合成バンド', storeId: null });
+      expect(r).toMatchObject({ status: 'found', sourceRef: 'lrclib:95' });
+    }
+  });
+
+  it('[REQ-LY-07][REQ-LY-03] 가수 표기가 다른 후보만 있으면 자동 적용하지 않고, 후보는 우선순위대로 보여 준다', async () => {
+    const w = world();
+    w.searchIndex.set('夜明けのホーム', [
+      rec({ id: 100, artistName: 'Unknown A', syncedLyrics: null }),
+      rec({ id: 101, artistName: 'Unknown B', syncedLyrics: JA.map((o, i) => `${stamp(i)}${o}`).join('\n') }),
+      rec({ id: 102, artistName: 'Unknown C', syncedLyrics: TRIPLET_LRC }),
+      rec({ id: 103, artistName: 'Unknown D', syncedLyrics: MEANING_LRC }),
+    ]);
+    const r = await provider(w).fetch(KR_QUERY);
+    expect(r.status).toBe('not_found');
+    if (r.status !== 'not_found') return;
+    expect(r.candidates?.map((c) => c.id)).toEqual([102, 103, 101, 100]);
   });
 });
 

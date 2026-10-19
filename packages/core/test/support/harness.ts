@@ -58,6 +58,8 @@ export const LRCLIB_FIXTURES: Record<string, string> = {
   'Broken Clock Only': 'lrclib/get-malformed-only.json',
   'Word Steps': 'lrclib/get-word-sync.json',
   'Odd Lines': 'lrclib/get-injection.json',
+  // 원문/한글 발음/한국어 뜻이 같은 시각으로 번갈아 적힌 합성 레코드(D-43)
+  星降るベンチ: 'lrclib/get-ja-embedded-ko.json',
 };
 
 export function installLrclibRoutes(http: FakeHttp): void {
@@ -116,6 +118,15 @@ export const TRACKS = {
     artist: 'Synthetic Band',
     album: 'Test Album',
     durationMs: 180_000,
+    isrc: null,
+  },
+  jaEmbedded: {
+    service: 'apple-music',
+    serviceTrackId: 'am.1101',
+    title: '星降るベンチ',
+    artist: 'Synthetic Band',
+    album: 'Test Album',
+    durationMs: 200_000,
     isrc: null,
   },
   instrumental: {

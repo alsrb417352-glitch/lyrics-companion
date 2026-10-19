@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   hasJapaneseScript,
+  originLabel,
   previewLrcImport,
   previewTxtImport,
   type ImportIssue,
@@ -70,14 +71,10 @@ export function EditScreen(props: {
   const baseLabel =
     mode === 'translation'
       ? props.translation
-        ? props.translation.origin === 'user'
-          ? '내 번역'
-          : 'AI 번역'
+        ? originLabel('translation', props.translation.origin)
         : null
       : props.pronunciation
-        ? props.pronunciation.origin === 'user'
-          ? '내 발음'
-          : 'AI 발음'
+        ? originLabel('pronunciation', props.pronunciation.origin)
         : null;
 
   const setOne = (id: string, v: string) => {

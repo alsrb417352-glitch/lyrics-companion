@@ -54,7 +54,11 @@ export interface Provenance {
   promptVersion: string;
 }
 
-export type TranslationOrigin = 'user' | 'ai';
+/**
+ * user: 사용자가 입력·가져온 것, ai: 앱이 AI에 요청해 만든 것,
+ * lyrics: 가사 출처(LRCLIB 레코드)에 원문과 함께 들어 있던 한국어 뜻·발음(D-43). 표시 순서는 user → ai → lyrics.
+ */
+export type TranslationOrigin = 'user' | 'ai' | 'lyrics';
 
 export interface TranslationVersion {
   id: string;

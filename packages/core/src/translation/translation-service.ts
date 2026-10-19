@@ -1,5 +1,5 @@
 import type { Clock, CancelSignal, IdGenerator } from '../ports.js';
-import type { JobFailure, JobKind, LyricsVersion, TranslationJob } from '../model.js';
+import type { JobFailure, JobKind, LyricsVersion, TranslationJob, TranslationOrigin } from '../model.js';
 import { translatableLines } from '../lyrics/lyrics-version.js';
 import { kanaToHangul } from '../pronunciation/kana-to-hangul.js';
 import type { Logger } from '../security/logger.js';
@@ -49,7 +49,7 @@ export type SkipReason =
   | 'unknown-outcome-pending';
 
 export type TranslationOutcome =
-  | { kind: 'existing'; origin: 'user' | 'ai'; versionId: string }
+  | { kind: 'existing'; origin: TranslationOrigin; versionId: string }
   | {
       kind: 'created';
       jobId: string;
@@ -104,8 +104,8 @@ export class TranslationService {
   }
 
   /**
-   * 표시용 번역 확보. 우선순위: 사용자 번역 → 저장된 AI 번역 → (조건 충족 시) 신규 AI 번역.
-   * 저장본이 있으면 어떤 경우에도 제공자를 호출하지 않는다.
+   * 표시용 번역 확보. 우선순위: 사용자 번역 → 저장된 AI 번역 → 가사에 포함된 번역 → (조건 충족 시) 신규 AI 번역.
+   * 저장본(가사에 포함된 번역 포함, D-43)이 있으면 어떤 경우에도 제공자를 호출하지 않는다.
    */
   async ensureTranslation(
     lyricsVersionId: string,

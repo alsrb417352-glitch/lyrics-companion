@@ -1,4 +1,10 @@
-import type { DisplaySettings, LyricsVersion, PronunciationVersion, TranslationVersion } from '../model.js';
+import type {
+  DisplaySettings,
+  LyricsVersion,
+  PronunciationVersion,
+  TranslationOrigin,
+  TranslationVersion,
+} from '../model.js';
 import type { SyncResult } from '../sync/sync-engine.js';
 import { hasJapaneseScript } from '../util/text.js';
 
@@ -24,8 +30,8 @@ export interface LyricsScreenView {
   mode: 'synced' | 'static' | 'instrumental' | 'position-unknown';
   rows: LyricRowView[];
   activeIndex: number | null;
-  translationSource: 'user' | 'ai' | null;
-  pronunciationSource: 'user' | 'ai' | null;
+  translationSource: TranslationOrigin | null;
+  pronunciationSource: TranslationOrigin | null;
   /** 단어 단위 싱크는 표시하지 않는다(원본에 있어도 행 단위) */
   wordLevelSync: false;
 }

@@ -8,6 +8,7 @@ import type {
   UserTimingVersion,
 } from '../model.js';
 import { buildLyricsVersion } from '../lyrics/lyrics-version.js';
+import { buildFetchedLyrics } from '../lyrics/fetched-lyrics.js';
 import {
   classifyLrclibRecord,
   type LyricsFetchResult,
@@ -254,20 +255,20 @@ export class NowPlayingSession {
   ): Promise<{ lyrics: LyricsVersion | null; notices: SessionState['notices']; candidates: LrclibRecord[] }> {
     const notices: SessionState['notices'] = [];
     if (res.status === 'found') {
-      const v = buildLyricsVersion({
-        id: this.deps.ids.next('lv'),
+      // 가사에 함께 들어 있던 한국어 뜻·발음(D-43)은 판본과 한 트랜잭션으로 저장한다.
+      // 그래서 이어지는 자동 번역은 "저장된 번역 있음"으로 AI를 부르지 않는다(불변조건 1).
+      const built = buildFetchedLyrics({
+        res,
         songId: song.id,
-        source: 'lrclib',
-        sourceRef: res.sourceRef,
-        kind: res.kind,
-        ...(res.kind === 'synced' ? { timed: res.timed } : {}),
-        ...(res.kind === 'plain' ? { plain: res.plain } : {}),
-        hasWordTimingSource: res.hasWordTiming,
+        ids: this.deps.ids,
         createdAtEpochMs: this.deps.clock.nowEpochMs(),
       });
-      await this.deps.store.saveLyricsVersion(v, { activate: true });
+      await this.deps.store.saveLyricsVersion(built.version, {
+        activate: true,
+        embedded: { translation: built.translation, pronunciation: built.pronunciation },
+      });
       notices.push(...res.notices);
-      return { lyrics: v, notices, candidates: [] };
+      return { lyrics: built.version, notices, candidates: [] };
     }
     if (res.status === 'rate_limited') notices.push('rate-limited');
     else if (res.status === 'error')
