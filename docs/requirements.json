@@ -269,14 +269,15 @@
     },
     {
       "id": "REQ-SY-01",
-      "title": "원문 타임스탬프(또는 사용자가 직접 탭으로 기록한 시간) 기준 행 단위 싱크, AI는 시간 정보를 만들거나 바꾸지 못함, 단어 싱크 흉내 금지",
+      "title": "원문 타임스탬프(또는 사용자가 직접 탭으로 기록한 시간, 사용자가 요청해 기기가 재생 소리를 듣고 맞춘 시간) 기준 행 단위 싱크, AI(번역 모델)는 시간 정보를 만들거나 바꾸지 못함, 단어 싱크 흉내 금지",
       "core": "verified",
       "app": "not-started",
       "design": "docs/architecture.md §8",
       "implementation": [
         "packages/core/src/sync/sync-engine.ts",
         "packages/core/src/lyrics/lrc.ts",
-        "packages/core/src/sync/user-timing.ts"
+        "packages/core/src/sync/user-timing.ts",
+        "packages/core/src/sync/auto-sync.ts"
       ],
       "manual": []
     },
@@ -332,6 +333,43 @@
         "apps/mobile/src/ui/NowPlayingScreen.tsx"
       ],
       "manual": ["MV-SY-01"]
+    },
+    {
+      "id": "REQ-SY-06",
+      "title": "소리로 싱크 맞추기(지금 곡): 시간 정보 없는 가사의 곡을 iPhone 스피커로 처음부터 재생하며 마이크로 듣고 기기 안 음성 인식으로 줄 시작 시각을 맞춰 '소리로 맞춘 싱크'(method auto, 새 버전)로 바로 적용 — 사용자가 시작했을 때만, 소리·인식 결과 저장·전송 없음, 다른 곡·잡음이면 저장 안 함, 탭 기록은 확인 후에만 바꿈, 되돌리기·탭으로 고치기 가능",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-44, docs/architecture.md §8·§13",
+      "implementation": [
+        "packages/core/src/sync/auto-sync.ts",
+        "packages/core/src/sync/heard-audio.ts",
+        "packages/core/src/sync/auto-sync-runner.ts",
+        "packages/core/src/storage/migrations.ts",
+        "packages/core/src/storage/lyrics-store.ts",
+        "packages/core/src/backup/backup-file.ts",
+        "packages/core/src/session/now-playing-session.ts",
+        "apps/mobile/modules/song-listener/ios/SongListenerModule.swift",
+        "apps/mobile/modules/song-listener/index.ts",
+        "apps/mobile/src/adapters/ios-song-listener.ts",
+        "apps/mobile/src/ui/AutoSyncScreen.tsx",
+        "apps/mobile/src/ui/NowPlayingScreen.tsx",
+        "apps/mobile/app.json"
+      ],
+      "manual": ["MV-SY-02"]
+    },
+    {
+      "id": "REQ-SY-07",
+      "title": "플레이리스트 소리로 싱크 맞추기: 저장된 가사가 시간 정보 없는 가사이고 싱크 기록이 없는 곡만 골라 그 곡들만 차례로 재생하며 곡마다 맞춰 저장(싱크 가사·탭 기록·가사 없음·중복은 건너뜀, 곡 언어별 인식, 멈추면 끝까지 들은 곡만 저장, 듣는 동안 가사가 바뀐 곡은 저장 안 함)",
+      "core": "verified",
+      "app": "partial",
+      "design": "docs/plan.md D-44",
+      "implementation": [
+        "packages/core/src/sync/auto-sync-runner.ts",
+        "apps/mobile/modules/now-playing/ios/NowPlayingModule.swift",
+        "apps/mobile/src/ui/AutoSyncBatchPanel.tsx",
+        "apps/mobile/src/ui/PlaylistsScreen.tsx"
+      ],
+      "manual": ["MV-SY-03"]
     },
     {
       "id": "REQ-UI-01",
@@ -882,6 +920,10 @@
     {
       "id": "AT-24",
       "title": "가사에 포함된 한국어 뜻·발음: 원문/발음/뜻이 번갈아 적힌 합성 싱크 가사 → 원문 줄만 가사(원문 시간·간주 빈 줄 유지), 뜻·발음은 '가사에 포함된' 번역·발음으로 표시, 자동 번역 켜짐에도 AI 0회, 재시작 후 네트워크 0회, 표시 순서 내 번역 → 직접 요청한 AI → 가사 포함(가사 포함 번역 보존), 일괄 받기·백업 가져오기도 같음, v3→v4 마이그레이션 seq 유지, 다른 판본·출처로는 저장 거부(원자적)"
+    },
+    {
+      "id": "AT-25",
+      "title": "소리로 싱크 맞추기: 시간 정보 없는 가사의 곡을 처음부터 재생하며 들은 말(가짜 듣기 모듈)로 맞춰 '소리로 맞춘 싱크' 저장·현재 행 강조·재실행·백업 유지·되돌리기, AI·네트워크 0회, 탭 기록은 확인 없이 안 바꿈(듣지도 않음), 마이크 거부·이어폰이면 듣지 않음·도중 이어폰 연결 시 저장 없이 멈춤, 못 들음·다른 곡 소리는 저장 안 함, 여기까지 저장은 들은 곳까지만, 플레이리스트는 대상 곡만 차례로(싱크 가사·탭 기록·가사 없음·중복 건너뜀, 곡 언어로 전환), 멈추면 끝까지 들은 곡만, 듣는 동안 바뀐 가사는 저장 안 함, v4→v5 마이그레이션"
     }
   ]
 }

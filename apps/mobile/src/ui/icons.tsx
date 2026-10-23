@@ -32,7 +32,8 @@ export type IconName =
   | 'share'
   | 'swap'
   | 'undo'
-  | 'refresh';
+  | 'refresh'
+  | 'mic';
 
 export function Icon(props: { name: IconName; size?: number; color: string; strokeWidth?: number }) {
   const { name, size = 24, color } = props;
@@ -240,6 +241,16 @@ export function Icon(props: { name: IconName; size?: number; color: string; stro
         <>
           <Path d="M9 7 4.5 11.5 9 16" {...line} />
           <Path d="M5 11.5h9a5 5 0 0 1 0 10h-2" {...line} />
+        </>
+      );
+      break;
+    case 'mic':
+      // 소리로 싱크 맞추기(마이크로 듣기)
+      body = (
+        <>
+          <Rect x={9} y={3} width={6} height={11} rx={3} {...line} />
+          <Path d="M5.5 11a6.5 6.5 0 0 0 13 0" {...line} />
+          <Path d="M12 17.5V21" {...line} />
         </>
       );
       break;

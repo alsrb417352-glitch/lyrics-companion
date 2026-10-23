@@ -36,6 +36,8 @@ export declare class NowPlayingNativeModule extends NativeModule<Events> {
   listPlaylists(): Promise<PlaylistRaw[]>;
   playlistItems(playlistId: string): Promise<PlaylistRaw[]>;
   playPlaylist(playlistId: string, startItemId: string | null, shuffle: boolean): Promise<boolean>;
+  /** 고른 보관함 곡들만 순서대로 처음부터 재생(반복·셔플 끔, 소리로 싱크 맞추기 일괄, D-44) */
+  playItems(persistentIds: string[]): Promise<boolean>;
 }
 
 export const NowPlaying = requireOptionalNativeModule<NowPlayingNativeModule>('NowPlaying');

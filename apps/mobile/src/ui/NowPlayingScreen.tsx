@@ -3,6 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import {
   streamingServiceLabel,
+  type AutoSyncRunner,
+  type LyricsVersion,
   type SessionState,
   type SkipReason,
   type TranslationOutcome,
@@ -17,6 +19,8 @@ import { EditScreen, type EditMode } from './EditScreen';
 import { LyricsList } from './LyricsList';
 import { LyricsPicker } from './LyricsPicker';
 import { SyncRecordScreen } from './SyncRecordScreen';
+import { AutoSyncScreen } from './AutoSyncScreen';
+import { useAutoSyncState } from './autoSyncText';
 import type { Theme } from './theme';
 import type { PlaybackApi } from './usePlayback';
 import { useSessionState } from './useSessionState';
@@ -71,6 +75,29 @@ function ToolTile(props: { theme: Theme; icon: IconName; label: string; onPress:
   );
 }
 
+/** 소리로 싱크 맞추기가 진행 중일 때 위쪽 띠(다른 화면으로 옮겨도 계속 진행됨) */
+function AutoSyncBanner(props: { runner: AutoSyncRunner; theme: Theme; onOpen: () => void }) {
+  const { theme } = props;
+  const st = useAutoSyncState(props.runner);
+  if (!st.running) return null;
+  const done = st.items.filter((i) => i.status === 'saved').length;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="소리로 싱크 맞추는 중. 자세히 보기"
+      onPress={props.onOpen}
+      style={[styles.banner, { backgroundColor: theme.surface, borderColor: theme.border }]}
+    >
+      <Icon name="mic" size={16} color={theme.accent} />
+      <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+        {st.mode === 'batch'
+          ? `소리로 싱크 맞추는 중 · ${st.label ?? ''} (${done}/${st.total}곡)`
+          : '소리로 싱크 맞추는 중 · 스피커로 재생해 주세요'}
+      </Text>
+    </Pressable>
+  );
+}
+
 function formatOffset(ms: number): string {
   const s = (ms / 1000).toFixed(1);
   return ms > 0 ? `+${s}초` : `${s}초`;
@@ -86,6 +113,13 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   const [picking, setPicking] = useState<false | 'search' | 'manual'>(false);
   const [editing, setEditing] = useState<EditMode | null>(null);
   const [recording, setRecording] = useState(false);
+  /** 소리로 싱크 맞추기 화면(연 때의 곡 정보. 곡이 끝나 다음 곡으로 넘어가도 결과를 보여 준다) */
+  const [autoSyncFor, setAutoSyncFor] = useState<{
+    title: string;
+    lyrics: LyricsVersion;
+    durationMs: number | null;
+    hasTapTiming: boolean;
+  } | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [toolMsg, setToolMsg] = useState<{ text: string; danger?: boolean } | null>(null);
 
@@ -139,6 +173,19 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
   const timing = useMemo(() => session.timingView(), [s, session]);
   const timedKind = timing?.kind ?? null;
   const canRecord = !!control && !!s.lyrics && s.lyrics.kind !== 'instrumental';
+  // 소리로 싱크 맞추기: iPhone + 시간 정보 없는 가사(원문 타임스탬프가 있는 가사는 맞출 필요 없음, D-44)
+  const autoSync = services.autoSync;
+  const canAutoSync = !!autoSync && !!control && s.phase === 'ready' && s.lyrics?.kind === 'plain';
+  const openAutoSync = () => {
+    if (!s.lyrics) return;
+    setMoreOpen(false);
+    setAutoSyncFor({
+      title: s.track?.title ?? s.song?.title ?? '',
+      lyrics: s.lyrics,
+      durationMs: s.song?.durationMs ?? s.track?.durationMs ?? null,
+      hasTapTiming: s.timing?.method === 'tap',
+    });
+  };
 
   const exportText = async () => {
     if (!s.lyrics) return;
@@ -178,6 +225,21 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           </Note>
         )}
       </View>
+    );
+  }
+
+  if (autoSyncFor && autoSync) {
+    return (
+      <AutoSyncScreen
+        services={services}
+        runner={autoSync}
+        theme={theme}
+        title={autoSyncFor.title}
+        lyrics={autoSyncFor.lyrics}
+        durationMs={autoSyncFor.durationMs}
+        hasTapTiming={autoSyncFor.hasTapTiming}
+        onDone={() => setAutoSyncFor(null)}
+      />
     );
   }
 
@@ -260,7 +322,9 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                         ? '시간 정보 없는 가사'
                         : timing?.source === 'user'
                           ? '내가 기록한 싱크'
-                          : '자동 싱크'}
+                          : timing?.source === 'auto'
+                            ? '소리로 맞춘 싱크'
+                            : '자동 싱크'}
                   </Text>
                 </View>
               ) : null}
@@ -279,6 +343,16 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
           />
         ) : null}
       </View>
+
+      {autoSync ? (
+        <AutoSyncBanner
+          runner={autoSync}
+          theme={theme}
+          onOpen={() => {
+            if (autoSync.current.mode === 'single') openAutoSync();
+          }}
+        />
+      ) : null}
 
       {/* 본문 */}
       {!services.playback ? (
@@ -452,10 +526,21 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                   style={{ marginRight: 8 }}
                 />
               ) : null}
-              {view?.mode === 'static' && canRecord ? (
+              {view?.mode === 'static' && canAutoSync ? (
                 <Button
                   theme={theme}
                   kind="primary"
+                  icon="mic"
+                  label="소리로 맞추기"
+                  accessibilityLabel="소리로 싱크 맞추기: 스피커로 재생하며 들어서 줄 시간을 맞춤"
+                  onPress={openAutoSync}
+                  style={{ marginRight: 8 }}
+                />
+              ) : null}
+              {view?.mode === 'static' && canRecord ? (
+                <Button
+                  theme={theme}
+                  kind={canAutoSync ? 'plain' : 'primary'}
                   icon="tap"
                   label="싱크 직접 기록"
                   onPress={() => setRecording(true)}
@@ -484,8 +569,16 @@ export function NowPlayingScreen(props: { services: AppServices; playback: Playb
                   <ToolTile
                     theme={theme}
                     icon="tap"
-                    label={timing?.source === 'user' ? '싱크 다시 기록' : '싱크 직접 기록'}
+                    label={timing?.source === 'user' || timing?.source === 'auto' ? '싱크 다시 기록' : '싱크 직접 기록'}
                     onPress={() => setRecording(true)}
+                  />
+                ) : null}
+                {canAutoSync ? (
+                  <ToolTile
+                    theme={theme}
+                    icon="mic"
+                    label={timing?.source === 'auto' ? '소리로 다시 맞추기' : '소리로 싱크 맞추기'}
+                    onPress={openAutoSync}
                   />
                 ) : null}
                 {s.timing ? (
@@ -546,6 +639,17 @@ const styles = StyleSheet.create({
   rowWrap: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   offset: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 4, marginLeft: 'auto' },
   toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   toolTile: {
     width: '31%',
     minHeight: 72,

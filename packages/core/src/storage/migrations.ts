@@ -170,6 +170,15 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE INDEX idx_pronunciations_lv ON pronunciations(lyrics_version_id)`,
     ],
   },
+  {
+    version: 5,
+    description:
+      '싱크 기록에 만든 방법(method: tap 탭 기록 / auto 소리로 맞춤, D-44)과 소리로 맞춘 결과 요약(auto_json) 추가 — 기존 기록은 tap',
+    statements: [
+      `ALTER TABLE user_timings ADD COLUMN method TEXT NOT NULL DEFAULT 'tap' CHECK (method IN ('tap','auto'))`,
+      `ALTER TABLE user_timings ADD COLUMN auto_json TEXT`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

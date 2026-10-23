@@ -93,8 +93,27 @@ export interface PronunciationVersion {
 }
 
 /**
- * 사용자가 직접 기록한 행 시작 시각(수동 싱크, docs/plan.md D-28).
- * - 사람이 노래를 들으며 탭해서 만든 시간만 저장한다. AI는 이 값을 만들거나 바꿀 수 없다(불변조건 5).
+ * 시간을 만든 방법.
+ * - tap: 사람이 노래를 들으며 줄마다 탭한 재생 위치(수동 싱크, D-28)
+ * - auto: 사용자가 요청해 기기가 재생 소리를 듣고(기기 안 음성 인식) 가사와 맞춘 시각(소리로 싱크 맞추기, D-44).
+ *   AI(번역 모델)가 만든 값이 아니며, 화면에 "소리로 맞춘 싱크"로 따로 표시한다.
+ */
+export type TimingMethod = 'tap' | 'auto';
+
+/** 소리로 맞춘 싱크의 요약(표시·이력용) */
+export interface AutoTimingInfo {
+  /** 인식 엔진 식별(예: apple-speech/ja-JP) */
+  engine: string;
+  /** 소리로 직접 찾은 줄 수 */
+  heardLines: number;
+  /** 그 사이를 글자 수·연 구분으로 채운 줄 수 */
+  filledLines: number;
+}
+
+/**
+ * 사용자 싱크 기록: 행 시작 시각(수동 싱크 D-28, 소리로 싱크 맞추기 D-44).
+ * - 사람이 탭한 재생 위치 또는 사용자가 요청해 기기가 재생 소리를 듣고 맞춘 시각만 저장한다.
+ *   AI(번역 모델)는 이 값을 만들거나 바꿀 수 없다(불변조건 5).
  * - 가사 판본은 그대로 두고(번역·발음의 행 ID 연결 유지) 시간만 별도 버전으로 추가한다.
  * - kind='cleared'는 "원래 시간으로 되돌리기"(추가 전용 저장이라 삭제 대신 표시를 남긴다).
  */
@@ -104,6 +123,10 @@ export interface UserTimingVersion {
   kind: 'timed' | 'cleared';
   /** lineId → 시작 ms(빈 행 제외, 가사 순서대로 앞에서부터 연속). cleared면 빈 객체 */
   lines: Record<string, number>;
+  /** 시간을 만든 방법(이전 기록·백업은 tap). cleared는 tap */
+  method: TimingMethod;
+  /** method가 auto일 때만 */
+  auto: AutoTimingInfo | null;
   /** 기록 당시 원문 textHash(이력용) */
   sourceTextHash: string;
   createdAtEpochMs: number;

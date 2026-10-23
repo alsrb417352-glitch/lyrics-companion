@@ -1,10 +1,12 @@
 import type { LyricLine, LyricsKind, LyricsVersion, UserTimingVersion } from '../model.js';
 
 /**
- * 수동 싱크(사용자가 탭으로 기록한 행 시작 시각, docs/plan.md D-28).
+ * 사용자 싱크 기록: 수동 싱크(사용자가 탭으로 기록한 행 시작 시각, docs/plan.md D-28)와
+ * 소리로 싱크 맞추기(사용자가 요청해 기기가 재생 소리를 듣고 맞춘 시각, D-44 — auto-sync.ts)가 같은 규칙으로 저장된다.
  *
  * 규칙
- * - 시간은 사람이 재생을 들으며 탭한 재생 위치만 쓴다. AI·추정으로 만들지 않는다(불변조건 5).
+ * - 시간은 사람이 재생을 들으며 탭한 재생 위치, 또는 사용자가 요청해 기기가 들은 재생 위치만 쓴다.
+ *   AI(번역 모델)는 시간을 만들지 않는다(불변조건 5).
  * - 가사 판본(원문·행 ID)은 바꾸지 않는다. 그래서 번역·발음 연결이 그대로 유지된다.
  * - 기록 대상은 빈 행이 아닌 행이고, 가사 순서대로 앞에서부터 연속으로 기록한다(중간을 건너뛰지 않음).
  *   빈 행(연 구분)은 다음 기록 행과 같은 시각을 받아 따로 강조되지 않는다.
@@ -86,8 +88,8 @@ export function selectUserTiming(versions: readonly UserTimingVersion[]): UserTi
 export interface EffectiveTiming {
   kind: LyricsKind;
   lines: LyricLine[];
-  /** 시간 정보의 출처: 원본 가사(LRC) 또는 사용자 기록 */
-  source: 'original' | 'user';
+  /** 시간 정보의 출처: 원본 가사(LRC), 사용자 탭 기록(user), 소리로 맞춘 싱크(auto, D-44) */
+  source: 'original' | 'user' | 'auto';
 }
 
 /** 기록되지 않은 행: 절대 활성화되지 않는 시각(진행을 꾸며내지 않음) */
@@ -114,5 +116,5 @@ export function effectiveTiming(lyrics: LyricsVersion, timing: UserTimingVersion
     if (own !== undefined) next = own;
     out[i] = { id: line.id, text: line.text, startMs };
   }
-  return { kind: 'synced', lines: out, source: 'user' };
+  return { kind: 'synced', lines: out, source: timing.method === 'auto' ? 'auto' : 'user' };
 }

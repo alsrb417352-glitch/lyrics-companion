@@ -495,6 +495,19 @@ export class NowPlayingSession {
     return { ok: true };
   }
 
+  /**
+   * 저장소에서 싱크 기록이 바뀐 뒤(소리로 싱크 맞추기 저장, D-44): 지금 화면의 가사이면 싱크·곡별 보정을 다시 읽는다.
+   * 다른 곡이면 아무것도 하지 않는다(그 곡을 다시 재생할 때 저장본을 읽음). 네트워크·AI 호출 없음.
+   */
+  async reloadTiming(lyricsVersionId: string): Promise<void> {
+    const lv = this.state.lyrics;
+    const song = this.state.song;
+    if (!lv || !song || lv.id !== lyricsVersionId) return;
+    const gen = this.state.generation;
+    this.update({ offsetMs: await this.deps.store.getSyncOffset(song.id) }, gen);
+    await this.refreshTexts(lv, gen);
+  }
+
   /** 내가 기록한 싱크를 쓰지 않고 원래 시간(또는 시간 없음)으로 되돌린다. 기록은 지우지 않고 '되돌리기' 버전을 추가. */
   async clearUserTiming(): Promise<void> {
     const lv = this.state.lyrics;

@@ -169,7 +169,7 @@ describe('AT-24 가사에 포함된 한국어 뜻·발음', () => {
 
     const d2 = new NodeSqliteDriver(path);
     const store = await LyricsStore.open(d2);
-    expect(await getSchemaVersion(d2)).toBe(4);
+    expect(await getSchemaVersion(d2)).toBe(LATEST_SCHEMA_VERSION); // v4 이후 마이그레이션(v5 등)까지 이어서 적용
     expect((await store.listTranslations('lv1')).map((t) => [t.id, t.origin, t.seq])).toEqual([
       ['t1', 'ai', 5],
       ['t2', 'user', 9],

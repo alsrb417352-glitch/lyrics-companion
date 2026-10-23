@@ -9,6 +9,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 **PC 버전**(2026-10-06 사용자 요청, D-36·D-37): `apps/pc-extension` — Windows Chrome/Edge 확장 프로그램(사이드 패널, music.apple.com 웹 플레이어 연동, 같은 core). API 키는 Windows DPAPI 보안 저장소 도우미(`native-host/`)에만. 설치는 `docs/pc-install.md`. **실제 브라우저 설치·Apple Music 웹 연동 확인 0건**. 이 PC에는 전역 Node가 없어 프로젝트 안 휴대용 Node(`.tmp/node/node-v24.21.0-win-x64`)로 검사한다(PATH 앞에 붙여 실행).
 **Android 버전**(2026-10-14 사용자 요청, D-41·D-42): 같은 `apps/mobile` 앱을 Android에서 **Spotify·YouTube Music·Apple Music 앱**과 함께 쓴다(UI·기능 동일). 재생 정보는 OS MediaSession(알림 접근 권한, 알림 내용 미사용) — Kotlin 모듈 `modules/now-playing/android`(원시 값만) + core `playback/android-media-session.ts`(해석). 플레이리스트 탭 = 재생 앱의 지금 재생 목록(대기열), 검색 탭 = 고른 앱에 검색 재생. Android Apple Music 앱의 MEDIA_ID는 곡 ID로 쓰지 않는다(형식 미확인, 불변조건 6). APK는 GitHub Actions(`ci/android-apk.yml`, 템플릿 디버그 키 서명), 설치는 `docs/android-install.md`. GitHub Actions `android-apk` 빌드 성공(2026-10-19 #1, APK 검사 포함 — Kotlin 모듈 컴파일 확인). **실기기 확인 0건**(이 PC에는 Android SDK 없음 — 로컬은 타입 검사·JS 번들·prebuild까지).
 **가사 우선순위**(2026-10-19 사용자 요청, D-43): 자동 조회·일괄 받기·가사 고르기 모두 ① 재생 중인 곡과 맞는지 ② 싱크 ③ 원문 ④ 한국어 뜻 ⑤ 한글 발음 순서로 고른다(core `lyrics/lyrics-ranking.ts`). 가사에 원문과 번갈아 든 한국어 뜻·발음 줄은 구조가 확실할 때만 나눠 "가사에 포함된" 번역·발음(origin `lyrics`, DB v4)으로 저장 — AI 자동 호출 없음, 표시 순서 내 번역 → AI → 가사 포함. 실제 LRCLIB 레코드로 나누기·순위는 확인, **실기기 확인 0건**(MV-LY-03).
+**소리로 싱크 맞추기**(2026-10-23 사용자 요청, D-44): 시간 정보 없는 가사를 iPhone 스피커로 처음부터 재생하며 마이크로 듣고 기기 안 음성 인식(`SpeechAnalyzer`/`SpeechTranscriber`, iOS 26 이상, 새 Swift 모듈 `modules/song-listener`)으로 알아들은 말을 가사와 맞춰 줄 시각을 만든다(core `sync/auto-sync.ts` 정렬·채우기, `heard-audio.ts` 오디오 시각→재생 위치, `auto-sync-runner.ts` 한 곡·플레이리스트 일괄). 결과는 "소리로 맞춘 싱크"(`user_timings.method` auto, DB v5)로 바로 적용·되돌리기 가능. 소리·인식 결과 저장·전송 없음, AI 호출 없음. 합성 시험만 통과, **Swift 컴파일(GitHub Actions)·실기기 확인 0건**(MV-SY-02·03).
 **AI 모델 이름**(2026-10-12, D-39): OpenAI 모델 칸에는 API ID(`gpt-6-luna`)를 정확히 넣어야 한다 — `luna`·`Luna`는 404 model_not_found. 설정의 "모델 목록 불러오기"(`GET /models`, 무료·가사 전송 없음)로 확인. 실기기에서 OpenAI까지 요청 도달·키 인증 통과는 확인(번역 성공은 미확인).
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
@@ -16,7 +17,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 2. 표시 우선순위 고정: 사용자 번역 → 저장된 AI 번역 → 가사에 포함된 번역(D-43) → 원문 → (조건 충족 시) 신규 AI 번역. 가사 선택은 곡 일치 → 싱크 → 원문 → 한국어 뜻 → 발음 순서(D-43).
 3. 사용자 번역은 일부 행만 있어도 AI로 보완·수정·덮어쓰지 않는다. 늦게 온 AI 응답도 마찬가지.
 4. 발음 생성·재번역은 명시 요청으로만, 새 버전으로 저장한다.
-5. 싱크는 원문 타임스탬프 또는 사용자가 직접 탭으로 기록한 시간만 기준(D-28). AI는 시간 정보를 만들거나 바꾸지 못한다. 위치를 모르면 진행을 꾸며내지 않는다. 단어 단위 싱크처럼 보이게 하지 않는다.
+5. 싱크는 원문 타임스탬프, 사용자가 직접 탭으로 기록한 시간(D-28), 또는 사용자가 요청해 기기가 재생 소리를 듣고 맞춘 시간(소리로 싱크 맞추기, method auto, D-44)만 기준. AI(번역 모델)는 시간 정보를 만들거나 바꾸지 못한다. 소리로 맞춘 싱크는 따로 표시하고, 탭 기록은 사용자 확인 없이 덮지 않는다. 위치를 모르면 진행을 꾸며내지 않는다. 단어 단위 싱크처럼 보이게 하지 않는다.
 6. 곡은 녹음 단위로 식별한다(라이브·리믹스·다른 버전 혼동 금지). 불확실하면 후보를 사용자에게 확인한다.
 7. 결과 미확인(타임아웃·앱 종료) 요청은 자동으로 다시 보내지 않는다. 저장은 원자적으로.
 8. API 키는 OS 보안 저장소에만. 소스·설정·로그·오류·테스트 데이터·내보내기·문서에 넣지 않는다. 키를 채팅에 붙여 넣으라고 요청하지 않는다.
@@ -34,7 +35,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 63개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 73개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

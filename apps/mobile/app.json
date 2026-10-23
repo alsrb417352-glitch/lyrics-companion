@@ -12,6 +12,8 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSAppleMusicUsageDescription": "Music 앱에서 재생 중인 곡을 확인해 가사를 보여 주고, 이 앱에서 고른 곡을 Music 앱으로 재생하기 위해 Apple Music과 보관함에 접근합니다.",
+        "NSMicrophoneUsageDescription": "'소리로 싱크 맞추기'를 시작했을 때만, 스피커로 나오는 노래를 듣고 가사 줄이 불리는 시간을 찾습니다. 소리는 저장하거나 기기 밖으로 보내지 않습니다.",
+        "NSSpeechRecognitionUsageDescription": "'소리로 싱크 맞추기'에서 들은 노래를 기기 안에서 글자로 바꿔 가사와 맞춥니다. 인식 결과는 시간을 맞추는 데만 쓰고 저장하지 않습니다.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

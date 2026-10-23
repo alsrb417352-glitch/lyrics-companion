@@ -1,4 +1,5 @@
 import type {
+  AutoTimingInfo,
   DisplaySettings,
   JobFailure,
   JobKind,
@@ -13,6 +14,7 @@ import type {
   TranslationOrigin,
   TranslationSettings,
   TranslationVersion,
+  TimingMethod,
   UserTimingVersion,
 } from '../model.js';
 import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_TRANSLATION_SETTINGS } from '../model.js';
@@ -61,6 +63,10 @@ export interface NewUserTiming {
   lyricsVersionId: string;
   kind: 'timed' | 'cleared';
   lines: Record<string, number>;
+  /** 시간을 만든 방법. 생략하면 tap(탭 기록). cleared는 항상 tap으로 저장 */
+  method?: TimingMethod;
+  /** method가 auto일 때 결과 요약 */
+  auto?: AutoTimingInfo | null;
   sourceTextHash: string;
   createdAtEpochMs: number;
 }
@@ -123,6 +129,12 @@ const isNumberMap = (x: unknown): x is Record<string, number> =>
   x !== null &&
   !Array.isArray(x) &&
   Object.values(x).every((v) => typeof v === 'number' && Number.isFinite(v));
+const isAutoInfo = (x: unknown): x is AutoTimingInfo =>
+  typeof x === 'object' &&
+  x !== null &&
+  typeof (x as AutoTimingInfo).engine === 'string' &&
+  typeof (x as AutoTimingInfo).heardLines === 'number' &&
+  typeof (x as AutoTimingInfo).filledLines === 'number';
 const isFailure = (x: unknown): x is JobFailure =>
   typeof x === 'object' && x !== null && typeof (x as JobFailure).kind === 'string';
 
@@ -402,9 +414,11 @@ export class LyricsStore {
   // ------------------------------------------------------------ 사용자 싱크 기록(수동 싱크)
 
   private insertUserTiming(t: NewUserTiming): Promise<{ changes: number }> {
+    const method: TimingMethod = t.kind === 'timed' && t.method === 'auto' ? 'auto' : 'tap';
+    const auto = method === 'auto' && t.auto ? JSON.stringify(t.auto) : null;
     return this.db.run(
-      `INSERT INTO user_timings(id,lyrics_version_id,kind,lines_json,source_text_hash,created_at) VALUES (?,?,?,?,?,?)`,
-      [t.id, t.lyricsVersionId, t.kind, JSON.stringify(t.lines), t.sourceTextHash, t.createdAtEpochMs],
+      `INSERT INTO user_timings(id,lyrics_version_id,kind,lines_json,method,auto_json,source_text_hash,created_at) VALUES (?,?,?,?,?,?,?,?)`,
+      [t.id, t.lyricsVersionId, t.kind, JSON.stringify(t.lines), method, auto, t.sourceTextHash, t.createdAtEpochMs],
     );
   }
 
@@ -431,11 +445,15 @@ export class LyricsStore {
   private static toUserTiming(r: Row): UserTimingVersion {
     const kind = str(r['kind']);
     if (kind !== 'timed' && kind !== 'cleared') throw new Error('kind 형식 오류');
+    const method: TimingMethod = r['method'] === 'auto' ? 'auto' : 'tap';
+    const autoRaw = strOrNull(r['auto_json']);
     return {
       id: str(r['id']),
       lyricsVersionId: str(r['lyrics_version_id']),
       kind,
       lines: parseJson(r['lines_json'], isNumberMap),
+      method,
+      auto: method === 'auto' && autoRaw !== null ? parseJson(autoRaw, isAutoInfo) : null,
       sourceTextHash: str(r['source_text_hash']),
       createdAtEpochMs: num(r['created_at']),
       seq: num(r['seq']),

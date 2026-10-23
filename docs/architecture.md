@@ -66,7 +66,7 @@
 - 알 수 없는 괄호 내용은 제목 일부로 남겨 보수적으로 비교(잘못된 연결보다 새 곡 생성이 안전). 리마스터·feat.·explicit 표기는 같은 녹음으로 본다.
 
 ## §7 저장소와 데이터 모델
-SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v4 — v3에서 `user_timings` 추가, v4에서 번역·발음 `origin`에 `lyrics` 추가: 표를 새로 만들어 기존 행을 `seq`까지 그대로 옮김). 앱에서는 **앱 문서 영역**(캐시 아님)에 DB 파일을 둔다.
+SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v5 — v3에서 `user_timings` 추가, v4에서 번역·발음 `origin`에 `lyrics` 추가: 표를 새로 만들어 기존 행을 `seq`까지 그대로 옮김, v5에서 `user_timings`에 만든 방법 `method`(tap/auto)·`auto_json` 열 추가: 기존 기록은 tap). 앱에서는 **앱 문서 영역**(캐시 아님)에 DB 파일을 둔다.
 
 | 테이블 | 내용 | 규칙 |
 |---|---|---|
@@ -76,7 +76,7 @@ SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v4 — v3에�
 | translations | 번역 버전(`origin` user/ai/lyrics, 행 ID→번역, 생성 당시 `source_text_hash`, 제공자·모델·프롬프트 버전 — lyrics는 `lrclib`·`lrclib:<id>`·`embedded-ko/v1`) | 추가만 함(덮어쓰기 없음). `seq`로 최신 판단 |
 | pronunciations | 발음 버전(행 ID→{kana, hangul}) | 위와 같음 |
 | sync_offsets | 곡별 보정값(ms) | ±30초로 제한 |
-| user_timings | 사용자가 탭으로 기록한 행 시작 시각(`kind` timed/cleared, 행 ID→ms) | 추가만 함. 가장 큰 `seq`가 현재 값, `cleared`면 원래 시간. 저장 시 판본 기준 검증 |
+| user_timings | 사용자 싱크 기록: 행 시작 시각(`kind` timed/cleared, 행 ID→ms), 만든 방법 `method`(tap = 탭 기록, auto = 소리로 맞춤, D-44)·`auto_json`(인식 엔진·소리로 찾은 줄 수·채운 줄 수) | 추가만 함. 가장 큰 `seq`가 현재 값, `cleared`면 원래 시간(cleared는 항상 tap). 저장 시 판본 기준 검증 |
 | settings | 키-값 설정(`display.*`, `translate.auto`) | 비밀정보 저장 금지 |
 | jobs | 번역 작업 상태 | §12 상태 전이 |
 | usage_daily | UTC 일자별 요청 수·원문 글자 수 | 요청 전 원자적 예약 |
@@ -87,11 +87,16 @@ SQLite, `PRAGMA user_version`으로 스키마 버전 관리(현재 v4 — v3에�
 
 ## §8 싱크
 - 입력: 가사 판본(행 시작 ms), `PlaybackSnapshot{status, positionMs|null, capturedAtMonotonicMs, rate}`, 곡별 보정값.
-- **행 시작 시각의 출처**(`effectiveTiming`, `sync/user-timing.ts`): 사용자 싱크 기록이 있으면 그것, 없으면 원문 타임스탬프. 사용자 기록은 사람이 재생을 들으며 탭한 재생 위치만 담는다(AI가 만들 수 없음). 기록 대상은 빈 행이 아닌 행이고 앞에서부터 연속·시각 비감소. 빈 행은 다음 기록 행과 같은 시각(따로 강조 안 됨), 기록하지 않은 행은 `+∞`(절대 활성화되지 않음 — 진행을 꾸며내지 않음). 일반(plain) 가사도 기록이 있으면 synced로 계산한다. 기록 저장 시 곡별 보정은 0으로 되돌린다(기록이 실제 재생 위치이므로).
+- **행 시작 시각의 출처**(`effectiveTiming`, `sync/user-timing.ts`): 사용자 싱크 기록이 있으면 그것(`source` user = 탭, auto = 소리로 맞춤), 없으면 원문 타임스탬프. 사용자 기록은 사람이 재생을 들으며 탭한 재생 위치, 또는 사용자가 요청해 기기가 재생 소리를 듣고 맞춘 재생 위치만 담는다(AI·번역 모델이 만들 수 없음). 기록 대상은 빈 행이 아닌 행이고 앞에서부터 연속·시각 비감소. 빈 행은 다음 기록 행과 같은 시각(따로 강조 안 됨), 기록하지 않은 행은 `+∞`(절대 활성화되지 않음 — 진행을 꾸며내지 않음). 일반(plain) 가사도 기록이 있으면 synced로 계산한다. 기록 저장 시 곡별 보정은 0으로 되돌린다(기록이 실제 재생 위치이므로).
 - `estimatePositionMs`: playing이면 `position + (now − capturedAt) × rate`(곡 길이로 상한), paused/stopped/buffering이면 고정, 위치 없음·상태 unknown·측정 후 60초 초과(기본 `maxExtrapolationMs`)면 **unknown**.
 - 표시 기준 시각 = 위치 + 보정값(양수면 가사가 먼저 넘어감). 현재 행 = 시작 ≤ 기준 시각인 마지막 행(이진 탐색). 빈 행(간주)도 행으로 취급.
 - 스냅샷의 곡이 화면의 곡과 다르면 `track-mismatch`로 적용하지 않는다.
 - Android 어댑터는 `PlaybackState.getLastPositionUpdateTime()`(elapsedRealtime)을 앱의 단조 시계로 사용해 `capturedAtMonotonicMs`에 넣는다. iOS는 `currentPlaybackTime`을 조회한 시각을 넣는다.
+- **소리로 싱크 맞추기**(D-44, iPhone): 
+  - 듣기(`SongListener` 포트, 앱 `modules/song-listener` Swift): 마이크 → `AVAudioConverter` → `SpeechAnalyzer` + `SpeechTranscriber`(기기 안 인식, `audioTimeRange` 속성, 가사 줄을 `AnalysisContext.contextualStrings` 힌트로). 결과는 **오디오 시각**(듣기 시작부터)의 알아들은 말, 그리고 0.5초마다 같은 시계로 잰 Music 앱 상태 표본. 오디오 세션은 `playAndRecord` + `measurement` + `mixWithOthers` + `defaultToSpeaker`(Music 재생을 멈추지 않고 처리 없이 들음). 소리는 저장·전송하지 않는다.
+  - 오디오 시각 → 재생 위치(`sync/heard-audio.ts` `ListenLog.window`): 같은 곡이 이어서 재생된 구간(가장 최근)만, 재생 중 표본으로 "위치 − 오디오 시각"이 일정한 구간(일시정지·탐색이면 0.7초 넘게 바뀜)을 나누고 구간마다 상위 10%(덜 늦게 읽힌 쪽, D-25와 같은 원리)를 차이로 쓴다. 표본 3개 미만 구간·다른 곡 구간·음수 위치는 버리고, 뒤로 탐색해 다시 들은 부분은 나중 것을 쓴다.
+  - 맞추기(`sync/auto-sync.ts` `alignHeardToLyrics`): 가사·들은 말을 비교 단위(가나·한자·한글 글자, 라틴 단어. 가타카나→히라가나·NFKC·소문자)로 나눠 정렬(가사는 모두 소비, 들은 말 앞뒤 잡음은 자유, 곡 안 상대 위치가 0.3 넘게 떨어진 짝은 금지 — 반복 후렴 혼동 방지). **우연 수준 확인**: 뒤집은 가사로 맞춘 짝 수보다 1.4배·8개 이상 많아야 한다(다른 곡·잡음 거부). 줄마다 맞은 단위의 "시작 시각 추정"이 서로 맞는 묶음(줄 길이의 ±30%)이 2개 이상(흔한 글자 둘뿐이면 이웃 단위나 드문 단위 필요)이면 기준점. 시각이 줄 순서대로 늘어나는 기준점만(가중 최장 증가 부분열). 기준점 사이는 ① 간격이 부르는 시간의 1.6배 이내면 글자 수 비례 ② 길면 연(빈 줄) 단위로 앞 기준점 연은 이어서·뒤 기준점 연은 거꾸로·사이 연은 약한 근거(맞은 글자) → 다시 들린 소리 묶음 → 고르게. 첫 기준점 앞은 거꾸로(전주 동안 강조 안 함, 훨씬 앞에서 노래가 들렸으면 거기부터), 마지막 기준점 뒤는 이어서 놓되 **들은 구간 끝 뒤는 시간을 만들지 않는다**(앞에서부터 연속 규칙). 시간을 준 줄의 20%(최소 3) 이상이 기준점이어야 저장.
+  - 실행(`sync/auto-sync-runner.ts` `AutoSyncRunner`): 한 곡 = 준비(권한·언어 모델·출력 경로) → 듣기 시작 → 처음으로 탐색·재생 → 다른 곡으로 넘어가거나 끝나면(반복 재생은 위치가 처음으로 돌아오면) 정지·맞추기·저장. 일괄 = 저장소만 보고 대상 고르기 → 언어별 준비 → 대상 곡만 대기열로 재생(`playItems`) → 곡이 바뀔 때마다 이전 곡 구간을 맞추기 대기열에 넣고(늦게 오는 인식 결과를 최대 6초 기다림) 다음 곡 언어·힌트로 전환. 저장 직전 판본·싱크 기록 재확인, `method: 'auto'`로 `saveUserTiming`, 곡별 보정 0, 지금 화면이면 `NowPlayingSession.reloadTiming`.
 
 ## §9 표시
 `composeLyricsView`(순수 함수): 행마다 `{original, pronunciation|null, translation|null, state(past/active/upcoming/static), accessibilityLabel}`. 표시 설정 변경은 이 함수 재호출만 하므로 I/O가 없다. 발음은 일본어 곡 + 일본어 문자가 있는 행에만. `wordLevelSync`는 항상 false.
@@ -150,6 +155,7 @@ idle → resolving → (needs-confirmation → [confirm|reject]) → loading-lyr
 - UI 부품(2026-10-05, D-32): `ui/icons.tsx`(react-native-svg로 직접 그린 아이콘), `common.tsx`의 `IconButton`·`ArtworkTile`·아이콘 붙은 `Button`, `PlaybackBar`(진행 막대·시간·재생 컨트롤). 아이콘만 있는 버튼은 접근성 이름을 필수로 받는다.
 - 원문 TXT 내보내기(D-29): core `lyricsToPlainText`·`plainTextFileName` → `adapters/text-export.ts`(캐시에 쓰고 공유 시트, 끝나면 삭제).
 - 수동 싱크(D-28): `SyncRecordScreen`(버튼 onPressIn 순간의 `estimatePositionMs`를 기록, 되돌리기 시 3초 앞으로 이동) → `NowPlayingSession.saveUserTiming`/`clearUserTiming`. 줄 탭 이동은 `session.lineStartMs(i)`(기록이 있으면 기록 시각).
+- 소리로 싱크 맞추기(2026-10-23, D-44): `modules/song-listener`(로컬 Expo 모듈, Apple 전용, Swift `SongListenerModule` — `check`·`prepare`·`start(locale, hints)`·`drain`·`stop`·`cancel`, iOS 26 미만은 `os-too-old`) → `adapters/ios-song-listener.ts`(core `SongListener` 포트) → `services.autoSync`(core `AutoSyncRunner`, 앱에 하나, 실행 중 화면 꺼짐 방지). 화면: 지금 재생의 "소리로 맞추기"(시간 정보 없는 가사일 때)·도구 타일 → `AutoSyncScreen`(안내·준비 상태·진행·결과), 실행 중 위쪽 띠, 머리 표시 "소리로 맞춘 싱크". 플레이리스트 화면 `AutoSyncBatchPanel`("싱크 없는 곡 소리로 맞추기 (n곡)") → Swift `NowPlaying.playItems(persistentIds)`(대상 곡만 대기열, 반복·셔플 끔). Info.plist에 마이크·음성 인식 사용 설명(app.json).
 - 지금 재생 하단: 자주 쓰지 않는 기능(가사 바꾸기·번역 입력·발음 고치기·원문 txt·싱크 기록·되돌리기)은 "도구" 버튼 안에 모았다. 시간 정보 없는 가사면 "싱크 직접 기록"을 바로 보인다.
 - Android(2026-10-14, D-41): 아래 §15. 화면은 같은 파일을 쓰고 `services.android`가 있을 때만 갈라진다(권한 안내 `AndroidAccess.tsx`, 플레이리스트 탭 `QueueScreen.tsx`, 검색 탭의 앱 고르기·검색 재생, 지금 재생 헤더의 앱 이름).
 - 남은 것: TXT/LRC **파일** 가져오기·행 수동 연결 화면, 곡별·전체 삭제(Phase 4).

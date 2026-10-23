@@ -13,6 +13,7 @@ import type { AppServices } from '../services';
 import { ArtworkTile, Button, IconButton, Note } from './common';
 import { Icon } from './icons';
 import { ITEM_BADGE, PlaylistLyricsBatchPanel, useBatchState } from './PlaylistLyricsBatchPanel';
+import { AutoSyncBatchPanel } from './AutoSyncBatchPanel';
 import type { Theme } from './theme';
 import { TranslationBundlePanel } from './TranslationBundlePanel';
 import type { PlaybackApi } from './usePlayback';
@@ -31,6 +32,7 @@ function mmss(ms: number | null): string {
  * - MusicKit 카탈로그 API를 쓰지 않으므로(무료 서명, ADR-0002) 보관함에 추가하지 않은 플레이리스트는 보이지 않는다.
  * - 가사 원문 일괄 받기(REQ-LY-05, D-31): 플레이리스트 곡들의 원문을 한 번에 받아 둔다. 곡 옆 ✓는 가사가 저장된 곡.
  * - 번역 한꺼번에 넣기(REQ-ED-05, D-34): 번역할 곡 원문을 한 파일로 내보내고, 채운 번역을 한 번에 가져온다.
+ * - 싱크 없는 곡 소리로 맞추기(REQ-SY-07, D-44): 시간 정보 없는 가사의 곡만 차례로 재생하며 마이크로 듣고 맞춘다.
  */
 export function PlaylistsScreen(props: {
   services: AppServices;
@@ -210,6 +212,17 @@ export function PlaylistsScreen(props: {
           tracks={refs}
           savedCount={savedNow ? savedNow.size : null}
         />
+        {services.autoSync ? (
+          <AutoSyncBatchPanel
+            runner={services.autoSync}
+            theme={theme}
+            playlistKey={open.persistentId}
+            playlistName={open.name}
+            tracks={tracks}
+            refs={refs}
+            onStarted={props.onOpenNowPlaying}
+          />
+        ) : null}
         <TranslationBundlePanel services={services} theme={theme} playlistName={open.name} tracks={refs} />
       </View>
     );

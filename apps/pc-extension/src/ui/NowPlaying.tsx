@@ -219,7 +219,9 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
                     ? '시간 정보 없는 가사'
                     : timing?.source === 'user'
                       ? '내가 기록한 싱크'
-                      : '자동 싱크'}
+                      : timing?.source === 'auto'
+                        ? '소리로 맞춘 싱크' // iPhone에서 맞춰 백업으로 옮긴 경우(D-44)
+                        : '자동 싱크'}
             </span>
           ) : null}
         </div>
@@ -404,7 +406,7 @@ export function NowPlaying(props: { services: AppServices; playback: PlaybackApi
                 {canRecord ? (
                   <ToolTile
                     icon="tap"
-                    label={timing?.source === 'user' ? '싱크 다시 기록' : '싱크 직접 기록'}
+                    label={timing?.source === 'user' || timing?.source === 'auto' ? '싱크 다시 기록' : '싱크 직접 기록'}
                     onClick={() => setRecording(true)}
                   />
                 ) : null}

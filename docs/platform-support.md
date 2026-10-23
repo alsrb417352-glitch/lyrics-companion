@@ -51,6 +51,7 @@
 - **곡 선택·제어**: `setQueue(with: storeIDs)`, `play/pause`, `skipToNextItem` 등 → 원래 목표인 "앱 안에서 곡 선택·청취 구간 조절"이 **iOS Apple Music 조합에서는 가능할 것으로 보임**.
 - **백그라운드**: 우리 앱은 백그라운드에서 오디오를 재생하지 않으므로 계속 실행되지 않는다. 복귀 시 현재 상태를 다시 읽는다(core: 오래된 측정값이면 위치 미확정).
 - **제약**: 홈 공유 곡은 `nowPlayingItem`이 nil. 메인 스레드에서만 사용.
+- **소리로 싱크 맞추기**(2026-10-23, D-44): 우리 앱은 Music 앱의 오디오를 읽을 수 없다(DRM, 다른 앱 오디오에 접근하는 공개 API 없음). 그래서 스피커로 나오는 소리를 **마이크**로 듣고, 기기 안 음성 인식 `SpeechAnalyzer`/`SpeechTranscriber`(Speech 프레임워크, **iOS 26 이상**, 일본어 `ja_JP`·영어·한국어 지원, 결과 글자마다 `audioTimeRange`)로 알아들은 말의 시각을 얻는다. 언어 모델은 `AssetInventory`로 OS가 내려받는다. 이어폰·블루투스로 재생하면 마이크가 소리를 듣지 못하므로 스피커 재생이 필요하다. 무료 Apple ID 서명으로 쓸 수 있다(개발자 토큰·App ID 서비스 불필요, Info.plist 사용 설명만). 클라우드 인식(OpenAI 전사 API)은 시각 정보가 `whisper-1`에만 있고 그 모델이 2027-02-26 종료 예정이라 쓰지 않는다. 노래 인식 정확도는 실기기 확인 전(MV-SY-02). Android·PC는 아직 지원하지 않는다(Android `SpeechRecognizer`는 단어 시각을 주지 않음, PC 웹 플레이어는 별도 검토).
 
 ### 2.6 iOS 앱 안 곡 선택 (유료 개발자 계정 없이) — 2026-10-04 확인
 - 검색: iTunes Search API `https://itunes.apple.com/search?term=…&country=…&entity=song` (키 불필요). 클라우드에서 직접 호출해 확인: `country=kr` 결과 0건, `country=jp` 결과 있음, 응답 `Content-Type: text/javascript`. → 앱은 `kr → jp → us` 순서로 시도(core `ItunesCatalogClient`).

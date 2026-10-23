@@ -185,6 +185,39 @@ public final class NowPlayingModule: Module {
       }
     }.runOnQueue(.main)
 
+    // 고른 보관함 곡들만 순서대로 재생 대기열에 넣고 처음부터 재생한다(소리로 싱크 맞추기 일괄 실행, D-44).
+    // 같은 곡이 끝없이 반복되지 않게 반복·셔플을 끈다(Music 앱 설정이 바뀜 — 화면에서 알림).
+    AsyncFunction("playItems") { (persistentIds: [String], promise: Promise) in
+      var items: [MPMediaItem] = []
+      for sid in persistentIds.prefix(5000) {
+        guard let pid = UInt64(sid) else { continue }
+        let q = MPMediaQuery.songs()
+        q.addFilterPredicate(
+          MPMediaPropertyPredicate(value: NSNumber(value: pid), forProperty: MPMediaItemPropertyPersistentID)
+        )
+        if let item = q.items?.first { items.append(item) }
+      }
+      if items.isEmpty {
+        promise.reject("E_NOT_FOUND", "보관함에서 곡을 찾지 못했습니다")
+        return
+      }
+      let p = self.player
+      p.shuffleMode = .off
+      p.repeatMode = .none
+      p.setQueue(with: MPMusicPlayerMediaItemQueueDescriptor(itemCollection: MPMediaItemCollection(items: items)))
+      p.prepareToPlay { error in
+        DispatchQueue.main.async {
+          if let error = error {
+            promise.reject("E_PREPARE", error.localizedDescription)
+            return
+          }
+          p.currentPlaybackTime = 0
+          p.play()
+          promise.resolve(true)
+        }
+      }
+    }.runOnQueue(.main)
+
     OnStartObserving("onChange") {
       DispatchQueue.main.async { self.startObserving() }
     }

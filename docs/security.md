@@ -24,6 +24,7 @@
 |---|---|---|---|
 | 알림 접근(Notification Listener) | Android | `MediaSessionManager.getActiveSessions` 사용 조건 | 사용 이유를 먼저 설명 후 설정 화면으로 안내. 거부 시 수동 모드. **알림 텍스트·발신자 등 알림 내용은 읽지 않고 저장·전송하지 않는다.** 서비스 구현은 `onNotificationPosted`를 비워 두고 세션 조회만 한다. **구현(2026-10-14, D-41)**: `LyricsNotificationListener`는 콜백이 비어 있고, `MediaSessionsModule`은 Spotify·YouTube Music·Apple Music 세션만 남겨 그 밖의 앱 미디어 정보도 읽지 않는다. 저장소 쓰기·로그에는 재생 정보 원시 값을 남기지 않는다. |
 | 미디어 라이브러리/Apple Music | iOS | `systemMusicPlayer` 상태 조회·제어 | 사용 설명 문구에 목적 명시 |
+| 마이크·음성 인식 | iOS | 소리로 싱크 맞추기(D-44): 스피커로 나오는 노래를 듣고 기기 안 음성 인식(`SpeechTranscriber`)으로 줄 시간을 맞춤 | **사용자가 시작을 눌렀을 때만** 권한을 묻고 듣는다(앱을 켜면 듣지 않음). 듣는 동안만 마이크를 켜고 끝나면 오디오 세션을 끈다. 소리는 파일로 남기지 않고, 알아들은 말은 메모리에서 시간 맞추기에만 쓰고 버린다(저장·로그·백업·전송 없음, 로그는 줄 수만). 인식은 기기 안에서만(`SpeechTranscriber`는 서버 인식 없음). 언어 모델 내려받기는 OS(AssetInventory)가 한다. 음성 인식 권한은 필요한 경우를 대비해 한 번 묻고, 거부돼도 기기 안 인식이 되면 그대로 쓴다. 가사 줄은 인식 힌트로 기기 안 인식기에만 넘긴다 |
 | 다른 앱 위에 표시 | Android | 오버레이(별도 기능) | 기본 비활성, MV-OVL-01 후 결정. 앱 매니페스트에서 `SYSTEM_ALERT_WINDOW`를 제거해 둔다(app.json `blockedPermissions`, 2026-10-14) |
 | 설치 앱 확인(`<queries>`) | Android | Spotify·YouTube Music·Apple Music 설치 여부·앱 열기·검색 재생 | 세 패키지만 선언. `QUERY_ALL_PACKAGES` 쓰지 않음 |
 | 네트워크 | 공통 | LRCLIB, 사용자 AI 제공자 | HTTPS만 |
@@ -36,6 +37,7 @@
 - **동의**: 자동 번역은 기본 꺼짐(`translate.auto=false`). 켜기 전·첫 수동 번역 전에 제공자 이름, 전송 데이터, 예상 비용(원문 글자 수 기반 추정, 제공자 단가는 사용자가 확인)을 보여주고 선택하게 한다.
 - **비용·호출 제한**: 일일 요청 상한(기본 30회, `reserveUsage`로 요청 전 원자적 예약), 1회 요청 크기 상한(400행·12,000자), 자동 재시도 없음(사용자 재시도만), 취소 지원(`CancelSignal`).
 - **LRCLIB**: 곡 제목·아티스트·앨범·길이가 전송된다. 순차·간격 요청, Retry-After 준수.
+- **소리로 싱크 맞추기(D-44)**: 앱이 밖으로 보내는 것은 없다(마이크 소리·인식 결과·가사 힌트 모두 기기 안). AI 제공자를 부르지 않으므로 비용이 없다. 처음 한 번 OS가 음성 인식 언어 모델을 내려받을 수 있다.
 
 ## §5 중복 과금 방지와 남는 경계
 - 요청 전 작업을 `in_flight`로 기록 → 응답 검증·저장과 `completed` 전환을 한 트랜잭션으로 처리.

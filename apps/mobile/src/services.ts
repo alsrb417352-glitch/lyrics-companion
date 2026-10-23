@@ -1,6 +1,7 @@
 import {
   AppleMusicLyricsProvider,
   ApiKeyManager,
+  AutoSyncRunner,
   createOpenAiCompatibleProvider,
   ItunesCatalogClient,
   LrclibClient,
@@ -19,6 +20,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { FetchHttpClient } from './adapters/http';
 import { AndroidMediaPlayback } from './adapters/android-playback-source';
 import { IosMusicPlaybackSource } from './adapters/ios-playback-source';
+import { IosSongListener } from './adapters/ios-song-listener';
 import { ExpoSecretStore } from './adapters/secure-store';
 import { ExpoSqliteDriver } from './adapters/sqlite-driver';
 import { RingLogSink, SystemClock, UuidIds } from './adapters/system';
@@ -57,6 +59,13 @@ export interface AppServices {
   android: AndroidMediaPlayback | null;
   /** 플레이리스트 가사 원문 일괄 받기(D-31). 화면을 옮겨도 계속되도록 앱 전체에서 하나만 둔다. */
   playlistBatch: PlaylistLyricsBatch;
+  /**
+   * 소리로 싱크 맞추기(D-44): iPhone 마이크 + 기기 안 음성 인식. 지금 곡·플레이리스트 일괄 모두 이 하나로(동시에 하나만).
+   * iPhone이 아니거나 듣기 모듈이 없으면 null(Android·PC는 아직 지원하지 않음).
+   */
+  autoSync: AutoSyncRunner | null;
+  /** 시작 전 준비 상태 확인용(권한을 묻지 않음) */
+  songListener: IosSongListener | null;
   logs: RingLogSink;
   /**
    * 이 키로 쓸 수 있는 AI 모델 ID 목록(D-39). 설정 화면의 "모델 목록 불러오기"용.
@@ -138,6 +147,19 @@ export async function createAppServices(): Promise<AppServices> {
     if (awake) void activateKeepAwakeAsync('playlist-batch').catch(() => undefined);
     else void deactivateKeepAwake('playlist-batch').catch(() => undefined);
   });
+  // 소리로 싱크 맞추기: iPhone Music 앱 연동 + 듣기 모듈이 있을 때만. 듣는 동안 화면이 꺼지면 마이크가 멈추므로 화면 꺼짐을 막는다.
+  const songListener = playback?.platform === 'ios' && IosSongListener.available() ? new IosSongListener() : null;
+  const autoSync =
+    songListener && playback
+      ? new AutoSyncRunner({ store, session, playback, listener: songListener, clock, ids, logger })
+      : null;
+  let listening = false;
+  autoSync?.subscribe((s) => {
+    if (s.running === listening) return;
+    listening = s.running;
+    if (listening) void activateKeepAwakeAsync('auto-sync').catch(() => undefined);
+    else void deactivateKeepAwake('auto-sync').catch(() => undefined);
+  });
   return {
     clock,
     ids,
@@ -151,6 +173,8 @@ export async function createAppServices(): Promise<AppServices> {
     playback,
     android,
     playlistBatch,
+    autoSync,
+    songListener,
     logs,
     listProviderModels: (providerId, baseUrl) =>
       listProviderModels({ providerId, baseUrl, http, keys, secrets, logger }),

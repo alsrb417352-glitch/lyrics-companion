@@ -61,6 +61,8 @@ function timingOf(lv: LyricsVersion, lines: Record<string, number>, seq = 1): Us
     lyricsVersionId: lv.id,
     kind: 'timed',
     lines,
+    method: 'tap',
+    auto: null,
     sourceTextHash: lv.textHash,
     createdAtEpochMs: 0,
     seq,

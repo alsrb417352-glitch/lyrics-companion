@@ -20,7 +20,7 @@ import { validateUserTiming } from '../sync/user-timing.js';
  * 백업 파일은 사용자가 고른 외부 파일이므로 불신 데이터다(불변조건 9, REQ-SEC-07·08).
  *  - 크기·개수·문자열 길이 상한, 형식(타입) 검사, 내부 참조(곡↔가사↔번역) 일관성 검사.
  *  - 가사 판본의 해시를 다시 계산해 원문·타임스탬프가 손상·변조되지 않았는지 확인한다
- *    (싱크는 원문 타임스탬프만 기준 — 불변조건 5).
+ *    (원문 타임스탬프는 싱크 기준이므로 — 불변조건 5).
  *  - 하나라도 틀리면 전체를 거부한다(일부만 들어가는 일 없음).
  *  - API 키·제공자 설정·자동 번역 동의는 백업에 없고, 있어도 읽지 않는다(불변조건 8, REQ-SEC-05).
  */
@@ -253,18 +253,31 @@ function parseUserTiming(x: unknown, i: number, lyrics: Map<string, LyricsVersio
   const raw = obj(o['lines'], `${w}.lines`);
   let lines: Record<string, number> = {};
   if (kind === 'timed') {
-    // 사람이 기록한 시간인지 알 수는 없지만, 판본의 행·순서·범위에 맞는지는 확인한다(불변조건 5·9).
+    // 사람이 기록한(또는 소리로 맞춘) 시간인지 알 수는 없지만, 판본의 행·순서·범위에 맞는지는 확인한다(불변조건 5·9).
     const checked = validateUserTiming(lv, raw);
     if (!checked.ok) fail(`${w}: ${checked.error}`);
     lines = checked.lines;
   } else if (Object.keys(raw).length > 0) {
     fail(`${w}: 되돌리기 기록에 시각이 있습니다`);
   }
+  // 만든 방법: 이전 형식(method 없음)은 탭 기록. 되돌리기 기록은 항상 tap(D-44)
+  const method = o['method'] === undefined ? 'tap' : oneOf(o['method'], ['tap', 'auto'] as const, `${w}.method`);
+  let auto: UserTimingVersion['auto'] = null;
+  if (method === 'auto' && kind === 'timed' && o['auto'] !== undefined && o['auto'] !== null) {
+    const a = obj(o['auto'], `${w}.auto`);
+    auto = {
+      engine: text(a['engine'], `${w}.auto.engine`, 100),
+      heardLines: int(a['heardLines'], `${w}.auto.heardLines`, 0, BACKUP_LIMITS.maxLinesPerVersion),
+      filledLines: int(a['filledLines'], `${w}.auto.filledLines`, 0, BACKUP_LIMITS.maxLinesPerVersion),
+    };
+  }
   return {
     id: id(o['id'], `${w}.id`),
     lyricsVersionId,
     kind,
     lines,
+    method: kind === 'timed' ? method : 'tap',
+    auto,
     sourceTextHash: text(o['sourceTextHash'], `${w}.sourceTextHash`, 128),
     createdAtEpochMs: int(o['createdAtEpochMs'], `${w}.createdAtEpochMs`, 0, MAX_EPOCH),
     seq: int(o['seq'], `${w}.seq`, 0, Number.MAX_SAFE_INTEGER),
