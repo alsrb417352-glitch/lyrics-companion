@@ -21,6 +21,7 @@ import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_TRANSLATION_SETTINGS } from '../model
 import type { StreamingService } from '../ports.js';
 import { BACKUP_FORMAT, type ServiceTrackLink, type UserDataExport } from '../backup/backup-file.js';
 import { migrate } from './migrations.js';
+import { parseKeepAliveSetting } from '../playback/background.js';
 import { validateUserTiming } from '../sync/user-timing.js';
 import { inTransaction, SerialQueue, type SqlDriver, type SqlValue } from './sql-driver.js';
 import {
@@ -649,6 +650,15 @@ export class LyricsStore {
     const checked = validateProviderConfig(c);
     if (!checked.ok) throw new Error(checked.error);
     await this.setSettings([['provider.config', serializeProviderConfig(checked.config)]]);
+  }
+
+  /** 백그라운드에서 가사 찾기·자동 번역(D-45). 사용자가 정한 적 없으면 켜짐. 기기 설정이라 백업에 넣지 않는다 */
+  async getBackgroundKeepAlive(): Promise<boolean> {
+    return parseKeepAliveSetting(await this.getSetting('background.keep_alive'));
+  }
+
+  async setBackgroundKeepAlive(enabled: boolean): Promise<void> {
+    await this.setSettings([['background.keep_alive', String(enabled)]]);
   }
 
   /** 전체(모든 곡 공통) 싱크 보정값. 사용자가 정한 적 없으면 null(앱 기본값 사용) */

@@ -601,6 +601,55 @@ const MUTANTS = [
     find: '} else if (to >= 0 && s.key !== null) break;',
     replace: '} else if (Math.random() > 2) break;',
   },
+  // ---- 백그라운드에서 가사 찾기·자동 번역(D-45)
+  {
+    id: 'M74',
+    req: 'REQ-PB-09',
+    desc: '오래 멈춘 뒤에도 백그라운드 유지를 놓지 않음(배터리 소모)',
+    file: S('playback/background.ts'),
+    find: "if (nowMs - this.lastActiveAt <= BACKGROUND_RULES.idleMs) return { on: true, reason: 'recently-playing' };",
+    replace: "if (nowMs - this.lastActiveAt >= 0) return { on: true, reason: 'recently-playing' };",
+  },
+  {
+    id: 'M75',
+    req: 'REQ-PB-09',
+    desc: '설정에서 꺼도 백그라운드 유지',
+    file: S('playback/background.ts'),
+    find: "if (!opts.enabled) return { on: false, reason: 'disabled' };",
+    replace: '// mutated',
+  },
+  {
+    id: 'M76',
+    req: 'REQ-SY-06',
+    desc: '소리로 싱크 맞추기가 듣는 동안에도 백그라운드 유지 오디오를 켬(오디오 세션 충돌)',
+    file: S('playback/background.ts'),
+    find: "if (opts.autoSyncRunning) return { on: false, reason: 'auto-sync' };",
+    replace: '// mutated',
+  },
+  {
+    id: 'M77',
+    req: 'REQ-PB-09',
+    desc: '백그라운드 유지가 아닐 때도 재생 상태를 계속 읽음',
+    file: S('playback/background.ts'),
+    find: 'return opts.keepAlive ? BACKGROUND_RULES.backgroundPollMs : null;',
+    replace: 'return BACKGROUND_RULES.backgroundPollMs;',
+  },
+  {
+    id: 'M78',
+    req: 'REQ-PB-09',
+    desc: '재생 따라가기가 곡 변경을 세션에 알리지 않음(백그라운드에서 가사·번역이 진행되지 않음)',
+    file: S('playback/background.ts'),
+    find: 'if (track) this.lastChange = this.deps.session.onTrackChanged(track).catch(() => undefined);',
+    replace: '// mutated',
+  },
+  {
+    id: 'M79',
+    req: 'REQ-PB-09',
+    desc: '백그라운드 설정 기본값을 꺼짐으로',
+    file: S('playback/background.ts'),
+    find: "return v !== 'false';",
+    replace: "return v === 'true';",
+  },
 ];
 
 const vitest = binPath('vitest');

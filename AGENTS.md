@@ -10,6 +10,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 **Android 버전**(2026-10-14 사용자 요청, D-41·D-42): 같은 `apps/mobile` 앱을 Android에서 **Spotify·YouTube Music·Apple Music 앱**과 함께 쓴다(UI·기능 동일). 재생 정보는 OS MediaSession(알림 접근 권한, 알림 내용 미사용) — Kotlin 모듈 `modules/now-playing/android`(원시 값만) + core `playback/android-media-session.ts`(해석). 플레이리스트 탭 = 재생 앱의 지금 재생 목록(대기열), 검색 탭 = 고른 앱에 검색 재생. Android Apple Music 앱의 MEDIA_ID는 곡 ID로 쓰지 않는다(형식 미확인, 불변조건 6). APK는 GitHub Actions(`ci/android-apk.yml`, 템플릿 디버그 키 서명), 설치는 `docs/android-install.md`. GitHub Actions `android-apk` 빌드 성공(2026-10-19 #1, APK 검사 포함 — Kotlin 모듈 컴파일 확인). **실기기 확인 0건**(이 PC에는 Android SDK 없음 — 로컬은 타입 검사·JS 번들·prebuild까지).
 **가사 우선순위**(2026-10-19 사용자 요청, D-43): 자동 조회·일괄 받기·가사 고르기 모두 ① 재생 중인 곡과 맞는지 ② 싱크 ③ 원문 ④ 한국어 뜻 ⑤ 한글 발음 순서로 고른다(core `lyrics/lyrics-ranking.ts`). 가사에 원문과 번갈아 든 한국어 뜻·발음 줄은 구조가 확실할 때만 나눠 "가사에 포함된" 번역·발음(origin `lyrics`, DB v4)으로 저장 — AI 자동 호출 없음, 표시 순서 내 번역 → AI → 가사 포함. 실제 LRCLIB 레코드로 나누기·순위는 확인, **실기기 확인 0건**(MV-LY-03).
 **소리로 싱크 맞추기**(2026-10-23 사용자 요청, D-44): 시간 정보 없는 가사를 iPhone 스피커로 처음부터 재생하며 마이크로 듣고 기기 안 음성 인식(`SpeechAnalyzer`/`SpeechTranscriber`, iOS 26 이상, 새 Swift 모듈 `modules/song-listener`)으로 알아들은 말을 가사와 맞춰 줄 시각을 만든다(core `sync/auto-sync.ts` 정렬·채우기, `heard-audio.ts` 오디오 시각→재생 위치, `auto-sync-runner.ts` 한 곡·플레이리스트 일괄). 결과는 "소리로 맞춘 싱크"(`user_timings.method` auto, DB v5)로 바로 적용·되돌리기 가능. 소리·인식 결과 저장·전송 없음, AI 호출 없음. 합성 시험 통과, Swift 컴파일은 GitHub Actions `ios-unsigned-ipa` #10 성공(2026-10-23, 브랜치 `claude/d44-auto-sync`), **실기기 확인 0건**(MV-SY-02·03).
+**백그라운드에서 가사 찾기·자동 번역**(2026-10-23 사용자 요청, D-45, iPhone): 설정 › 백그라운드(기본 켜짐)가 켜져 있으면 Music 재생 중(멈춘 지 10분 안)에는 다른 소리와 섞이는 무음을 재생해(`UIBackgroundModes = audio`, now-playing 모듈 `SilentKeepAlive`) 앱이 백그라운드에서도 3초마다 재생 상태를 읽고, 곡이 바뀌면 화면에 보일 때와 같은 경로로 가사 조회·자동 번역(켜져 있을 때만)을 한다. 판단은 core `playback/background.ts`(`KeepAlivePolicy`·`playbackPollMs`·`PlaybackFollower`, AT-26). App Store 심사 지침 2.5.4에 맞지 않아 개인 설치용. Android는 범위 밖. **실기기 확인 0건**(MV-PB-IOS-05).
 **AI 모델 이름**(2026-10-12, D-39): OpenAI 모델 칸에는 API ID(`gpt-6-luna`)를 정확히 넣어야 한다 — `luna`·`Luna`는 404 model_not_found. 설정의 "모델 목록 불러오기"(`GET /models`, 무료·가사 전송 없음)로 확인. 실기기에서 OpenAI까지 요청 도달·키 인증 통과는 확인(번역 성공은 미확인).
 
 ## 반드시 지킬 불변조건 (docs/architecture.md §11)
@@ -35,7 +36,7 @@ Phase 1 진행 중(**iPhone + Apple Music 전용**, 사용자 결정 2026-10-04:
 npm ci                  # 최초 1회
 npm run check           # 포맷·린트·타입·테스트·빌드·비밀정보·추적성 (결과: reports/harness/latest.md)
 npm run check:fix       # 포맷 수정 + 추적표 재생성 후 전체 검사
-npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 73개 모두 검출돼야 함)
+npm run check:mutation  # 테스트 실효성 점검(핵심 불변조건 뮤턴트 79개 모두 검출돼야 함)
 ```
 실기기·스트리밍 계정·실제 AI 호출이 필요한 검증은 `docs/testing.md` §5 수동 절차로만 하고 결과를 `docs/manual-verification/records/`에 남긴다.
 

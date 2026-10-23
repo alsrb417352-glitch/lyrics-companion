@@ -10,6 +10,7 @@ import {
 import { DEFAULT_LYRICS_LEAD_MS, type AppServices } from '../services';
 import { useSessionState } from './useSessionState';
 import { BackupSection } from './BackupSection';
+import { BackgroundSection } from './BackgroundSection';
 import { Button, Chip, Note } from './common';
 import type { Theme } from './theme';
 
@@ -30,7 +31,8 @@ function utcDay(epochMs: number): string {
 }
 
 /**
- * 설정: AI 제공자·API 키(REQ-TR-01, REQ-SEC-01/03), 자동 번역 동의(REQ-TR-13, REQ-SEC-05).
+ * 설정: AI 제공자·API 키(REQ-TR-01, REQ-SEC-01/03), 자동 번역 동의(REQ-TR-13, REQ-SEC-05),
+ * 백그라운드에서 가사 찾기·자동 번역(REQ-PB-09, D-45 — iPhone).
  * API 키는 iOS Keychain에만 저장하고 화면에는 끝 4자리만 보인다. 입력칸은 저장 후 비운다.
  */
 export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
@@ -324,6 +326,10 @@ export function SettingsScreen(props: { services: AppServices; theme: Theme }) {
         <Note theme={theme}>
           오늘(UTC) 요청: {usage.requests}회 · 보낸 원문 {usage.sourceChars.toLocaleString()}자
         </Note>
+      ) : null}
+
+      {services.background ? (
+        <BackgroundSection keeper={services.background} theme={theme} autoTranslate={auto} />
       ) : null}
 
       <Text style={[styles.h2, { color: theme.text, marginTop: 24 }]}>가사 싱크(모든 곡)</Text>

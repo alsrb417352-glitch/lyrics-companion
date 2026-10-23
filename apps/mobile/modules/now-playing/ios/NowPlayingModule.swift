@@ -5,6 +5,7 @@
 //   packages/core/src/playback/ios-system-player.ts 에서 테스트로 고정한다.
 // - systemMusicPlayer는 메인 스레드에서만 사용한다(Apple 문서).
 // - 다른 앱(Spotify·YouTube Music)의 재생 정보는 읽지 않는다(공개 API 없음, 비공개 API 사용 금지).
+// - 백그라운드 유지(D-45)는 SilentKeepAlive.swift(소리 없는 오디오를 다른 소리와 섞어 재생).
 
 import ExpoModulesCore
 import MediaPlayer
@@ -12,6 +13,8 @@ import MediaPlayer
 public final class NowPlayingModule: Module {
   private var observers: [NSObjectProtocol] = []
   private var observing = false
+  /// 백그라운드 유지(소리 없는 오디오, D-45)
+  private let keepAlive = SilentKeepAlive()
 
   private var player: MPMusicPlayerController {
     MPMusicPlayerController.systemMusicPlayer
@@ -218,6 +221,15 @@ public final class NowPlayingModule: Module {
       }
     }.runOnQueue(.main)
 
+    // 백그라운드 유지 켜기·끄기(D-45). 결과 "on" | "off" | "failed". 언제 켤지는 core KeepAlivePolicy가 정한다.
+    AsyncFunction("setKeepAlive") { (on: Bool) -> String in
+      return self.keepAlive.set(on)
+    }.runOnQueue(.main)
+
+    AsyncFunction("keepAliveStatus") { () -> String in
+      return self.keepAlive.status()
+    }.runOnQueue(.main)
+
     OnStartObserving("onChange") {
       DispatchQueue.main.async { self.startObserving() }
     }
@@ -227,7 +239,10 @@ public final class NowPlayingModule: Module {
     }
 
     OnDestroy {
-      DispatchQueue.main.async { self.stopObserving() }
+      DispatchQueue.main.async {
+        self.stopObserving()
+        _ = self.keepAlive.set(false)
+      }
     }
   }
 

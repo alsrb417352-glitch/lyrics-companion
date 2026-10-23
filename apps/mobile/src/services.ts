@@ -21,6 +21,7 @@ import { FetchHttpClient } from './adapters/http';
 import { AndroidMediaPlayback } from './adapters/android-playback-source';
 import { IosMusicPlaybackSource } from './adapters/ios-playback-source';
 import { IosSongListener } from './adapters/ios-song-listener';
+import { BackgroundKeeper } from './adapters/background-keeper';
 import { ExpoSecretStore } from './adapters/secure-store';
 import { ExpoSqliteDriver } from './adapters/sqlite-driver';
 import { RingLogSink, SystemClock, UuidIds } from './adapters/system';
@@ -66,6 +67,11 @@ export interface AppServices {
   autoSync: AutoSyncRunner | null;
   /** 시작 전 준비 상태 확인용(권한을 묻지 않음) */
   songListener: IosSongListener | null;
+  /**
+   * 백그라운드에서 가사 찾기·자동 번역(D-45): Music 앱이 재생하는 동안 소리 없는 오디오로 깨어 있게 한다(iPhone).
+   * Android·지원하지 않는 환경이면 null(그때는 화면에 보일 때만 따라간다).
+   */
+  background: BackgroundKeeper | null;
   logs: RingLogSink;
   /**
    * 이 키로 쓸 수 있는 AI 모델 ID 목록(D-39). 설정 화면의 "모델 목록 불러오기"용.
@@ -160,6 +166,8 @@ export async function createAppServices(): Promise<AppServices> {
     if (listening) void activateKeepAwakeAsync('auto-sync').catch(() => undefined);
     else void deactivateKeepAwake('auto-sync').catch(() => undefined);
   });
+  const background = BackgroundKeeper.available() ? new BackgroundKeeper({ store, clock, logger, autoSync }) : null;
+  await background?.start();
   return {
     clock,
     ids,
@@ -175,6 +183,7 @@ export async function createAppServices(): Promise<AppServices> {
     playlistBatch,
     autoSync,
     songListener,
+    background,
     logs,
     listProviderModels: (providerId, baseUrl) =>
       listProviderModels({ providerId, baseUrl, http, keys, secrets, logger }),

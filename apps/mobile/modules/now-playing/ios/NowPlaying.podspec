@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name           = 'NowPlaying'
   s.version        = '0.1.0'
-  s.summary        = 'Music 앱(systemMusicPlayer) 현재 곡·재생 위치 읽기와 재생 제어'
+  s.summary        = 'Music 앱(systemMusicPlayer) 현재 곡·재생 위치 읽기와 재생 제어, 백그라운드 유지(소리 없는 오디오)'
   s.description    = 'Lyrics Companion 로컬 Expo 모듈. MediaPlayer 프레임워크만 사용한다(MusicKit 개발자 토큰 불필요).'
   s.license        = 'UNLICENSED'
   s.author         = 'lyrics-companion'
@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'MediaPlayer'
+  s.frameworks = 'MediaPlayer', 'AVFoundation'
 
   s.source_files = "**/*.{h,m,swift}"
   s.pod_target_xcconfig = {
