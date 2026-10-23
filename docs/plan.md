@@ -132,7 +132,8 @@
 
 **2026-10-23 백그라운드에서 가사 찾기·자동 번역(D-45)**
 - 확인한 것(클라우드 Linux, D-44 브랜치 위 사본): core 판단(`KeepAlivePolicy`·`playbackPollMs`·`PlaybackFollower`)과 백그라운드 흐름을 수용 시험 AT-26으로 확인(가짜 재생 측정으로 곡이 바뀌면 가사·AI 번역 저장, 자동 번역 꺼짐이면 AI 0회, 같은 곡 반복 측정에 재조회 없음, 재시작 후 네트워크·AI 0회), 뮤턴트 M74~M79, 앱 타입 검사.
-- **미확인**: Swift `SilentKeepAlive` 컴파일(GitHub Actions 결과는 아래 기록), 실기기에서 실제로 백그라운드에 깨어 있는지·Music 재생 영향·배터리(MV-PB-IOS-05), 백그라운드에서 소리로 싱크 맞추기가 계속 듣는지(MV-SY-03).
+- Swift 컴파일·IPA: **GitHub Actions `ios-unsigned-ipa` #11 성공**(2026-10-23, 브랜치 `claude/d45-background` 커밋 fdeaa36, run 39905287952 — core 검사 → prebuild(`UIBackgroundModes = audio`) → `BUILD SUCCEEDED`·앱 묶음 검사 통과, IPA 아티팩트 9.33MB·2026-11-06까지), `ci` #13 성공. 뮤테이션 79/79 검출, iOS·Android JS 번들, `expo prebuild --platform ios`로 Info.plist 확인.
+- **미확인**: 실기기에서 실제로 백그라운드에 깨어 있는지·Music 재생 영향·배터리(MV-PB-IOS-05), 백그라운드에서 소리로 싱크 맞추기가 계속 듣는지(MV-SY-03).
 
 **연동(실기기 0건)**
 - 세 서비스 Android 앱이 MediaSession에 제공하는 실제 필드(MEDIA_ID 형식, 위치 갱신 빈도), 사이드로드 시 알림 접근 제한 여부.

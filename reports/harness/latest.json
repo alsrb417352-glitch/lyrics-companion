@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-23T05:09:00.208Z",
+  "startedAt": "2026-10-23T05:28:01.045Z",
   "node": "v22.22.0",
   "platform": "linux-x64",
   "root": "/home/claude/work/lc/",
@@ -11,55 +11,55 @@
       "name": "format",
       "label": "포맷(Prettier)",
       "status": "pass",
-      "durationMs": 6720
+      "durationMs": 6643
     },
     {
       "name": "lint",
       "label": "정적 분석(ESLint, 아키텍처 경계 포함)",
       "status": "pass",
-      "durationMs": 9680
+      "durationMs": 9813
     },
     {
       "name": "typecheck",
       "label": "타입 검사(테스트 포함)",
       "status": "pass",
-      "durationMs": 4036
+      "durationMs": 3821
     },
     {
       "name": "test",
       "label": "핵심 테스트(Vitest: 단위·수용, 가짜 제공자·가짜 시계·실제 SQLite)",
       "status": "pass",
-      "durationMs": 11766
+      "durationMs": 10832
     },
     {
       "name": "build",
       "label": "빌드(core, 플랫폼 타입 없이 컴파일)",
       "status": "pass",
-      "durationMs": 2329
+      "durationMs": 2498
     },
     {
       "name": "app",
       "label": "앱 타입 검사(apps/mobile, 의존성 설치 시에만)",
       "status": "pass",
-      "durationMs": 4633
+      "durationMs": 4835
     },
     {
       "name": "pc",
       "label": "PC 확장 프로그램 타입 검사·빌드(apps/pc-extension, 의존성 설치 시에만)",
       "status": "pass",
-      "durationMs": 4271
+      "durationMs": 4240
     },
     {
       "name": "secrets",
       "label": "비밀정보 검사",
       "status": "pass",
-      "durationMs": 93
+      "durationMs": 98
     },
     {
       "name": "trace",
       "label": "요구사항 추적성(요구사항↔테스트↔문서)",
       "status": "pass",
-      "durationMs": 52
+      "durationMs": 56
     }
   ],
   "tests": {
